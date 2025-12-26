@@ -124,11 +124,8 @@ RLS_MISSING_SCOPE_BEHAVIOR=deny
 # ============================================================================
 # User / Business Database (READ-ONLY ACCESS REQUIRED)
 # ============================================================================
-ORACLE_CONNECTION_STRING=oracle+oracledb://MAJED:StrongPass123@10.10.10.10:1521/XEPDB1  >>> CHANGE ME <<<
-#ORACLE_CONNECTION_STRING=oracle+oracledb://user:password@host:port/service  <<< CHANGE ME <<<
-
+ORACLE_CONNECTION_STRING=oracle+cx_oracle://user:pass@host:1521/service   >>> CHANGE ME <<<
 MSSQL_CONNECTION_STRING=
-
 
 # Rules:
 # - Only ONE connection string is used (based on DB_PROVIDER)

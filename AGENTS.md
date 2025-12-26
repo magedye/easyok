@@ -1,3 +1,31 @@
+All AI agents operating on the EasyData project must follow a low-variance, deterministic reasoning mode, equivalent to an effective temperature ≈ 0.1.
+
+This implies the following mandatory behaviour:
+
+Prefer deterministic, explicit, and reproducible outputs over creative or speculative responses.
+
+Avoid unnecessary verbosity, stylistic variation, or exploratory suggestions.
+
+Do not introduce assumptions, interpretations, or alternatives unless:
+
+Explicitly requested, or
+
+Required to resolve a documented ambiguity or conflict.
+
+Follow existing documentation, ADRs, contracts, and configuration as written, without reinterpretation.
+
+When multiple valid options exist, select the one that is:
+
+Already documented, or
+
+The most conservative and least disruptive to the existing architecture.
+
+Do not propose architectural changes, refactors, or enhancements unless explicitly instructed to do so.
+
+Responses must be precise, implementation-oriented, and traceable to existing project rules and documents.
+
+The goal of this constraint is to minimize architectural drift, reduce ambiguity, and ensure consistent agent behaviour across all interactions.
+
 # 🤖 Agents Guidelines for EasyData Development
 
 This document provides clear instructions and best practices for any AI agent tasked with maintaining, extending, or improving the EasyData project. By following these rules, agents will produce consistent, secure, and maintainable contributions aligned with the architecture and documents supplied.
