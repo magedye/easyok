@@ -66,9 +66,9 @@ def create_app() -> FastAPI:
         app.add_middleware(PerformanceMiddleware)
 
     # Add routers
-    app.include_router(query.router, prefix="/api/v1", tags=["query"])
-    app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
-    app.include_router(health.router, prefix="/api/v1", tags=["health"])
+    app.include_router(query.router, prefix="/api/v1")
+    app.include_router(admin.router, prefix="/api/v1")
+    app.include_router(health.router, prefix="/api/v1")
 
     return app
 

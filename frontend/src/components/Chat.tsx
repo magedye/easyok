@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
-import { apiAskQuestion } from '../api';
-import { parseNDJSON } from '../utils/ndjson';
+import { useEffect, useState } from 'react';
+
+import { useEasyStream } from '../api';
+import type { AskChunk } from '../types/api';
+
 import DataTable from './DataTable';
 import ChartView from './ChartView';
 import SummaryView from './SummaryView';
@@ -24,13 +26,19 @@ interface StreamError {
 
 export default function Chat() {
   const [question, setQuestion] = useState('');
-  const [loading, setLoading] = useState(false);
   const [dataRows, setDataRows] = useState<DataRow[] | null>(null);
   const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null);
   const [summary, setSummary] = useState<SummaryResult | null>(null);
   const [error, setError] = useState<StreamError | null>(null);
 
-  // Reset previous results
+  const { start, cancel, isStreaming } = useEasyStream();
+
+  useEffect(() => {
+    return () => {
+      cancel();
+    };
+  }, [cancel]);
+
   const reset = () => {
     setDataRows(null);
     setChartConfig(null);
@@ -38,39 +46,40 @@ export default function Chat() {
     setError(null);
   };
 
+  const handleChunk = (chunk: AskChunk) => {
+    switch (chunk.type) {
+      case 'technical_view':
+        // Intentionally ignored in MVP UI.
+        break;
+      case 'data':
+        setDataRows(chunk.payload as DataRow[]);
+        break;
+      case 'chart':
+        setChartConfig({ type: chunk.payload.chart_type, config: chunk.payload });
+        break;
+      case 'summary':
+        setSummary({ text: chunk.payload });
+        break;
+      case 'error':
+        setError({ message: chunk.payload.message || 'An error occurred' });
+        break;
+      default:
+        // Exhaustiveness safeguard for forward-compatible chunk types.
+        break;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!question.trim()) return;
+
     reset();
-    setLoading(true);
+
     try {
-      const response = await apiAskQuestion(question.trim(), null);
-      if (!response.ok || !response.body) {
-        const msg = await response.text();
-        throw new Error(msg || 'Unknown error');
-      }
-      for await (const chunk of parseNDJSON(response)) {
-        switch (chunk.phase) {
-          case 'data':
-            setDataRows(chunk.rows || []);
-            break;
-          case 'chart':
-            setChartConfig({ type: chunk.type, config: chunk.config });
-            break;
-          case 'summary':
-            setSummary({ text: chunk.text });
-            break;
-          case 'error':
-            setError({ message: chunk.message || 'An error occurred' });
-            break;
-          default:
-            console.warn('Unknown phase', chunk);
-        }
-      }
-    } catch (err: any) {
-      setError({ message: err.message || 'An error occurred' });
-    } finally {
-      setLoading(false);
+      await start({ question: question.trim(), stream: true }, handleChunk);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError({ message: msg || 'An error occurred' });
     }
   };
 
@@ -88,14 +97,12 @@ export default function Chat() {
             placeholder="Enter your question in Arabic or English"
           />
         </div>
-        <button type="submit" className="btn" disabled={loading}>
-          {loading ? 'Loading...' : 'Ask'}
+        <button type="submit" className="btn" disabled={isStreaming}>
+          {isStreaming ? 'Loading...' : 'Ask'}
         </button>
       </form>
       {error && (
-        <div className="bg-red-100 text-red-700 p-2 rounded">
-          Error: {error.message}
-        </div>
+        <div className="bg-red-100 text-red-700 p-2 rounded">Error: {error.message}</div>
       )}
       {dataRows && (
         <div>

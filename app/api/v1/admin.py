@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.api.dependencies import require_permission, UserContext
 
-router = APIRouter()
+router = APIRouter(tags=["admin"]) 
 
 
 @router.post("/training/approve")

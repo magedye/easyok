@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { saveToken } from '../api';
 import { useNavigate } from 'react-router-dom';
 
 // Simple login component that allows the user to paste a JWT token.
-// In a real application, you would implement a proper authentication flow.
+// AUTH is currently disabled; token is stored only for compatibility.
 export default function Login() {
   const [tokenInput, setTokenInput] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -15,8 +14,8 @@ export default function Login() {
       setError('Please enter a token');
       return;
     }
-    // Save token to local storage
-    saveToken(tokenInput.trim());
+
+    localStorage.setItem('token', tokenInput.trim());
     setError(null);
     navigate('/');
   };
@@ -36,9 +35,7 @@ export default function Login() {
           />
         </div>
         {error && (
-          <div className="bg-red-100 text-red-700 p-2 rounded">
-            {error}
-          </div>
+          <div className="bg-red-100 text-red-700 p-2 rounded">{error}</div>
         )}
         <button type="submit" className="btn">
           Save Token

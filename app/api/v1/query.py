@@ -7,7 +7,7 @@ from app.api.dependencies import optional_auth, UserContext
 from app.models.request import QueryRequest
 from app.services.orchestration_service import OrchestrationService
 
-router = APIRouter()
+router = APIRouter(tags=["query"])
 orchestration_service = OrchestrationService()
 
 
