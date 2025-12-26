@@ -1,0 +1,6 @@
+Filename,Path,Purpose,Oracle Interaction,Status,Recommended action
+extract_and_ingest_ddl.py,scripts/oracle/extract_and_ingest_ddl.py,Extract DDL from Oracle and ingest into vector store (ddl collection),Read-only (extract) + Write (vector store),Added,Use for READ stage; require REVIEW/APPROVAL before TRAIN; run with VANNA_ALLOW_DDL=true
+oracle_vector.py,vanna/src/vanna/legacy/oracle/oracle_vector.py,Legacy vector store that inserted embeddings directly into Oracle,Read/Write (writes embeddings to Oracle),Legacy/Deprecated,Move to scripts/legacy/ and add RuntimeError guard to prevent direct training
+query_oracle.py,scripts/oracle/query_oracle.py,CLI tool to execute queries against Oracle,Read-only,Active,Keep as read-only export tool; add examples for JSON export
+promote_reviewed_training.py,scripts/promote/promote_reviewed_training.py,Promote reviewed snapshots → training (dry-run default),No direct Oracle writes (audit to system DB),Active,Keep dry-run default and audit logging
+sync_vector_store.py,scripts/promote/sync_vector_store.py,TRAIN phase: rebuild Chromadb from reviewed snapshot,No direct Oracle writes (syncs vector store),Active,Keep under admin controls; document execution

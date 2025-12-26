@@ -11,6 +11,7 @@ pydantic-settings
 # ============================================================================
 sqlalchemy>=2.0
 oracledb>=2.0       # Keeps compatibility with your OracleProvider logic
+chromadb>=0.4.0      # Vector store client used for DDL ingestion (scripts)
 pyodbc>=5.0
 pydantic-settings
 sqlparse

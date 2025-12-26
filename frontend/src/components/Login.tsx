@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
+import { AUTH_ENABLED, TOKEN_STORAGE_KEY } from '../config';
 
 // Simple login component that allows the user to paste a JWT token.
 // AUTH is currently disabled; token is stored only for compatibility.
@@ -8,6 +10,13 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    // When AUTH is disabled (MVP), /login is not used.
+    if (!AUTH_ENABLED) {
+      navigate('/', { replace: true });
+    }
+  }, [navigate, AUTH_ENABLED]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!tokenInput.trim()) {
@@ -15,7 +24,7 @@ export default function Login() {
       return;
     }
 
-    localStorage.setItem('token', tokenInput.trim());
+    localStorage.setItem(TOKEN_STORAGE_KEY, tokenInput.trim());
     setError(null);
     navigate('/');
   };

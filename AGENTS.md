@@ -51,20 +51,24 @@ When in doubt, consult these documents. If something is missing or ambiguous, re
 1. **Contract First:** Define API request/response models in Pydantic (`models/`) and update `master_api_contract.md` before implementing an endpoint. The frontend relies on this contract to stay stable across backend changes.
 2. **Structured Monolith Only:** Do not introduce microservices or random module structures. Follow the canonical project structure described in `guidelines.md` and the `project_design_document.md`.
 3. **Single Source of Truth (SSOT):** Configuration values must be read from `.env` via `core/config.py`. Do not hard-code secrets, connection strings, or feature toggles anywhere else. Provide a `.env.example` for new environment variables.
-4. **Lazy Loading:** Use the factory pattern in `providers/factory.py` to instantiate only the necessary providers (DB, LLM, vector store) at runtime. Avoid global imports of database drivers or heavy dependencies.
-5. **Keep Services Stateless:** No service should maintain state between requests (other than database or vector store). Avoid singletons with stateful behaviour.
-6. **Isolation of Concerns:**
+4. **Python Virtual Environment (PEP 668):** Always use a project-local virtual environment at `./.venv/`.
+
+   - Install dependencies ONLY inside the venv (`pip install -r requirements.txt` after `source .venv/bin/activate`).
+   - Never run `pip install` against the system Python (do not use `--break-system-packages`).
+5. **Lazy Loading:** Use the factory pattern in `providers/factory.py` to instantiate only the necessary providers (DB, LLM, vector store) at runtime. Avoid global imports of database drivers or heavy dependencies.
+6. **Keep Services Stateless:** No service should maintain state between requests (other than database or vector store). Avoid singletons with stateful behaviour.
+7. **Isolation of Concerns:**
 * `core/` contains configuration, constants, exceptions, and security utilities. It must not import from `api/` or `services/`.
 * `providers/` implement interfaces defined in `providers/base.py`. Each provider file should only implement one concrete provider.
 * `services/` encapsulate business logic. They should not depend on FastAPI or HTTP concepts.
 * `api/` contains FastAPI routes and dependency injection; it must not contain business logic.
 
 
-7. **Middleware:** implements cross-cutting concerns (logging, rate limiting, performance, security) and must be toggleable via `.env`.
-8. **RBAC and Security:** Enforce permissions using roles and scopes defined in `security_permissions_matrix.md`. Never bypass `require_permission` dependencies in routes. Use the SQL firewall and RLS injection described in the design document for every generated SQL.
-9. **Streaming Responses:** When implementing the `/api/v1/ask` endpoint, return data via NDJSON as specified (data → chart → summary). Do not send all data at once.
-10. **Circuit Breaker & Error Handling:** Use the `CircuitBreaker` utility to wrap calls to external services (LLM, databases). Centralise exception handling in `core/exceptions.py` and return unified JSON responses (status, message, data, error_code, timestamp).
-11. **Testing and Documentation:** Write unit tests for critical logic. If you introduce a new pattern or complex behaviour, create an ADR in `docs/adr/` explaining your choice. Update the SRS if requirements evolve.
+8. **Middleware:** implements cross-cutting concerns (logging, rate limiting, performance, security) and must be toggleable via `.env`.
+9. **RBAC and Security:** Enforce permissions using roles and scopes defined in `security_permissions_matrix.md`. Never bypass `require_permission` dependencies in routes. Use the SQL firewall and RLS injection described in the design document for every generated SQL.
+10. **Streaming Responses:** When implementing the `/api/v1/ask` endpoint, return data via NDJSON as specified (data → chart → summary). Do not send all data at once.
+11. **Circuit Breaker & Error Handling:** Use the `CircuitBreaker` utility to wrap calls to external services (LLM, databases). Centralise exception handling in `core/exceptions.py` and return unified JSON responses (status, message, data, error_code, timestamp).
+12. **Testing and Documentation:** Write unit tests for critical logic. If you introduce a new pattern or complex behaviour, create an ADR in `docs/adr/` explaining your choice. Update the SRS if requirements evolve.
 
 ## 🛠️ Development Workflow for Agents
 

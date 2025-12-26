@@ -6,3 +6,9 @@ export const API_BASE_URL: string =
 
 // Storage keys for tokens or other items
 export const TOKEN_STORAGE_KEY = 'token';
+
+// Frontend authentication toggle.
+// - Default: disabled (MVP)
+// - To enable: set VITE_AUTH_ENABLED=true when building/running the frontend.
+export const AUTH_ENABLED: boolean =
+  String(import.meta.env.VITE_AUTH_ENABLED ?? 'false').toLowerCase() === 'true';

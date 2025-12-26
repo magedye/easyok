@@ -9,8 +9,26 @@
 #     VITE_API_BASE_URL=http://10.10.10.10:8000
 # - Runs backend + frontend concurrently
 # - CTRL+C stops both processes cleanly
+#
+# IMPORTANT (PEP 668):
+# - Do NOT install Python dependencies into the system Python.
+# - This script expects a project virtual environment at ./.venv
+#   and runs uvicorn via that venv.
 
 set -euo pipefail
+
+VENV_DIR=".venv"
+VENV_PY="${VENV_DIR}/bin/python"
+
+if [[ ! -x "${VENV_PY}" ]]; then
+  echo "[error] Missing Python virtual environment at ./${VENV_DIR}" >&2
+  echo "Create it and install dependencies:" >&2
+  echo "  python3 -m venv .venv" >&2
+  echo "  source .venv/bin/activate" >&2
+  echo "  pip install --upgrade pip" >&2
+  echo "  pip install -r requirements.txt" >&2
+  exit 1
+fi
 
 LAN_HOST="10.10.10.10"
 BACKEND_HOST="0.0.0.0"
@@ -50,7 +68,7 @@ fi
 
 echo "[1/2] Starting Backend (Uvicorn --reload) on ${BACKEND_HOST}:${BACKEND_PORT}"
 # Use `setsid` so we can stop the whole process group cleanly on CTRL+C.
-setsid uvicorn app.main:app --reload --host "${BACKEND_HOST}" --port "${BACKEND_PORT}" &
+setsid "${VENV_PY}" -m uvicorn app.main:app --reload --host "${BACKEND_HOST}" --port "${BACKEND_PORT}" &
 backend_pid="$!"
 
 echo "[2/2] Starting Frontend (Vite HMR) on ${FRONTEND_HOST}:${FRONTEND_PORT}"
