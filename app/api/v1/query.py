@@ -1,23 +1,35 @@
-"""
-API endpoints for querying the system.
-
-The query endpoint accepts natural language questions and streams
-results back to the client via NDJSON.  Users must be authenticated
-and have the appropriate permission.
-"""
-
-from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse
-
-from app.models.request import QueryRequest
-from app.api.dependencies import get_current_user
-from app.services.orchestration import OrchestrationService
-
+from fastapi import APIRouter, Depends, HTTPException
+from app.api.dependencies import optional_auth, UserContext
+from app.services.vanna_service import VannaService
+from app.core.config import get_settings
 
 router = APIRouter()
+vanna_service = VannaService()
 
-@router.post("/ask", response_class=StreamingResponse)
-async def ask_question(payload: QueryRequest, user=Depends(get_current_user)) -> StreamingResponse:
-    """Endpoint to submit a question and receive a streaming response."""
-    service = OrchestrationService()
-    return await service.ask(payload.question, user)
+
+@router.post("/ask")
+async def ask(
+    question: str,
+    user: UserContext = Depends(optional_auth),
+):
+    """
+    Ask a natural language question.
+    
+    This endpoint works with or without authentication,
+    depending on AUTH_ENABLED setting.
+    
+    Args:
+        question: Natural language question
+        user: User context (injected automatically)
+    
+    Returns:
+        Query result with optional RLS filtering
+    """
+    try:
+        result = await vanna_service.ask(
+            question=question,
+            user_context=user,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

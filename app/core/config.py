@@ -1,52 +1,33 @@
-"""
-Application configuration module.
-
-This module defines the Settings class which reads configuration from
-environment variables via Pydantic.  It centralises all tunable
-parameters and ensures a single source of truth for the application.
-
-To change a configuration value, edit the `.env` file at the project
-root.  Do not hard‑code any configuration in other modules.
-"""
-
 from pydantic_settings import BaseSettings
-from pydantic import Field
 from typing import Literal
 
-
 class Settings(BaseSettings):
-    # --------------------
-    # LLM Selector
-    # --------------------
-    LLM_PROVIDER: Literal[
-            "openai",
-            "google",
-            "ollama",
-            "phi3",
-            "groq",
-        ] = "openai"
-    
-        # --------------------
-        # Shared LLM Settings
-        # --------------------
-        LLM_TEMPERATURE: float = 0.2
-        LLM_MAX_TOKENS: int = 2048
-    
-        # --------------------
-        # PHI-3 (OpenAI-compatible)
-        # --------------------
-        PHI3_API_KEY: str | None = None
-        PHI3_MODEL: str = "phi-3"
-        PHI3_BASE_URL: str | None = None
-    
-        # --------------------
-        # GROQ
-        # --------------------
-        GROQ_API_KEY: str | None = None
-        GROQ_MODEL: str = "llama-3.1-8b-instant"
-    
-        class Config:
-            env_file = ".env"
+    # -------------------------------------------------
+    # Application
+    # -------------------------------------------------
+    APP_NAME: str = "EasyData"
+    APP_VERSION: str = "16.0.0"
+    DEBUG: bool = False
 
+    # -------------------------------------------------
+    # Security Toggles (CRITICAL)
+    # -------------------------------------------------
+    AUTH_ENABLED: bool = True
+    RBAC_ENABLED: bool = True
+    RLS_ENABLED: bool = True
+
+    # -------------------------------------------------
+    # JWT Configuration (SSOT)
+    # -------------------------------------------------
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRATION_MINUTES: int = 60
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
 
 settings = Settings()
+
+def get_settings() -> Settings:
+    return settings

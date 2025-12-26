@@ -1,23 +1,46 @@
-"""
-Administrative endpoints for training and audit management.
-
-Only users with appropriate permissions (manager or admin) can access
-these endpoints.  Implementation is intentionally minimal.
-"""
-
 from fastapi import APIRouter, Depends, HTTPException
-
-from app.models.request import TrainingItem
-from app.api.dependencies import require_permission
-from app.core.security import Permission
-from app.services.training_service import TrainingService  # type: ignore
-
+from app.api.dependencies import require_permission, UserContext
 
 router = APIRouter()
 
 
-@router.post("/training", dependencies=[Depends(require_permission(Permission.TRAINING_UPLOAD))])
-async def upload_training(item: TrainingItem):
-    service = TrainingService()
-    service.add_training_item(item.question, item.sql, item.metadata or {})
-    return {"status": "ok", "message": "Training item received"}
+@router.post("/training/approve")
+async def approve_training(
+    training_id: str,
+    user: UserContext = Depends(require_permission("training:approve")),
+):
+    """
+    Approve training data.
+    
+    Requires 'training:approve' permission.
+    If RBAC_ENABLED=false, all authenticated users can access.
+    If AUTH_ENABLED=false, anonymous users can access.
+    
+    Args:
+        training_id: Training data ID
+        user: Authenticated user (with permission check)
+    
+    Returns:
+        Success confirmation
+    """
+    return {
+        "status": "approved",
+        "training_id": training_id,
+        "approved_by": user["user_id"],
+    }
+
+
+@router.get("/dashboard")
+async def get_dashboard(
+    user: UserContext = Depends(require_permission("admin:view")),
+):
+    """
+    Get admin dashboard.
+    
+    Requires 'admin:view' permission.
+    """
+    return {
+        "user": user["user_id"],
+        "role": user["role"],
+        "permissions": user["permissions"],
+    }
