@@ -1,21 +1,25 @@
 import time
-from openai import AsyncOpenAI
+from groq import AsyncGroq
+
 from app.providers.base import BaseLLMProvider
 from app.core.config import Settings
 
 
-class Phi3Provider(BaseLLMProvider):
+class GroqProvider(BaseLLMProvider):
     """
-    PHI-3 LLM Provider
-    OpenAI-compatible, self-hosted
+    GROQ LLM Provider
+    Uses official GROQ SDK (NOT OpenAI-compatible)
     """
 
     def __init__(self, settings: Settings):
-        self.client = AsyncOpenAI(
-            api_key=settings.PHI3_API_KEY,
-            base_url=settings.PHI3_BASE_URL,
+        if not settings.GROQ_API_KEY:
+            raise ValueError("GROQ_API_KEY is required")
+
+        self.client = AsyncGroq(
+            api_key=settings.GROQ_API_KEY
         )
-        self.model = settings.PHI3_MODEL
+
+        self.model = settings.GROQ_MODEL
         self.temperature = settings.LLM_TEMPERATURE
         self.max_tokens = settings.LLM_MAX_TOKENS
 
@@ -23,8 +27,14 @@ class Phi3Provider(BaseLLMProvider):
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {"role": "system", "content": "You are a SQL expert."},
-                {"role": "user", "content": prompt},
+                {
+                    "role": "system",
+                    "content": "You are a senior SQL expert. Return ONLY valid SQL.",
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
             ],
             temperature=self.temperature,
             max_tokens=self.max_tokens,
@@ -36,14 +46,14 @@ class Phi3Provider(BaseLLMProvider):
         start = time.monotonic()
 
         try:
-            # Minimal request – zero business value
-            response = await self.client.models.list()
+            # GROQ supports models listing
+            await self.client.models.list()
 
             latency = int((time.monotonic() - start) * 1000)
 
             return {
                 "status": "healthy",
-                "provider": "phi3",
+                "provider": "groq",
                 "model": self.model,
                 "latency_ms": latency,
                 "error": None,
@@ -52,7 +62,7 @@ class Phi3Provider(BaseLLMProvider):
         except Exception as e:
             return {
                 "status": "unhealthy",
-                "provider": "phi3",
+                "provider": "groq",
                 "model": self.model,
                 "latency_ms": None,
                 "error": str(e),

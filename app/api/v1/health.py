@@ -1,18 +1,13 @@
-"""
-Health check endpoint.
-
-Expose minimal information about application status for monitoring.
-"""
-
 from fastapi import APIRouter
-from datetime import datetime
+from app.services.health_service import HealthService
 
-router = APIRouter()
+router = APIRouter(prefix="/health", tags=["Health"])
 
 
-@router.get("/health")
-def health_check():
+@router.get("/llm")
+async def llm_health():
     return {
         "status": "ok",
-        "timestamp": datetime.utcnow().isoformat(),
+        "component": "llm",
+        "details": await HealthService.llm_health(),
     }

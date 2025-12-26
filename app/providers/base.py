@@ -36,12 +36,24 @@ class BaseVectorStore(ABC):
 
 
 class BaseLLMProvider(ABC):
-    """Contract for large language model providers."""
+    """
+    Contract for all LLM providers
+    """
 
     @abstractmethod
-    def generate_sql(self, prompt: str, temperature: float, max_tokens: int) -> str:
-        """Generate SQL code given a prompt and parameters."""
+    async def generate_sql(self, prompt: str) -> str:
+        ...
 
     @abstractmethod
-    def generate_summary(self, question: str, sql: str, results: List[Dict[str, Any]]) -> str:
-        """Generate a natural language summary of query results."""
+    async def health_check(self) -> Dict[str, Any]:
+        """
+        Must return:
+        {
+            "status": "healthy" | "unhealthy",
+            "provider": str,
+            "model": str,
+            "latency_ms": int | None,
+            "error": str | None
+        }
+        """
+        ...
