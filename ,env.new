@@ -1,0 +1,20 @@
+
+# ─────────────────────────────────────
+# LLM (groq ) 
+# ─────────────────────────────────────
+LLM_PROVIDER=groq 
+# GROQ
+GROQ_API_KEY=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
+GROQ_MODEL=llama-3.1-8b-instant
+
+
+# ----------------------------------------------------------------------------
+# LLM — PHI-3 (Local/OpenAI-compatible endpoint)
+# ----------------------------------------------------------------------------
+PHI3_API_KEY=not-needed-for-local
+PHI3_MODEL=phi-3
+PHI3_BASE_URL=http://10.10.10.1:1234/v1
+
+LLM_TEMPERATURE=0.2
+LLM_MAX_TOKENS=2048
+LLM_TIMEOUT=60

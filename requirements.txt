@@ -1,0 +1,27 @@
+# Core framework
+fastapi
+uvicorn
+pydantic
+pydantic-settings
+
+# Database drivers
+oracledb==2.0.1  # Oracle database driver replacing cx_Oracle
+pyodbc==5.1.0    # MSSQL ODBC driver
+sqlalchemy>=2.0
+
+# Vector store clients
+chromadb>=0.4
+qdrant-client>=1.5
+
+# Additional utilities
+python-dotenv
+ujson
+structlog
+prometheus-client
+sqlparse
+
+# Testing
+pytest
+mypy
+black
+ruff
