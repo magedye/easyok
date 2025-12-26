@@ -1,115 +1,144 @@
-# 🧾 وثيقة عقد الـ API الشامل (Master API Contract)
+# 🧾 Master API Contract (Current / Binding)
 
-هذه الوثيقة تصف كيفية تواصل واجهة المستخدم (الفرونت إند) مع واجهة البرمجة الخلفية (Backend) للنظام، مع توضيح نماذج الطلبات والاستجابات والأخطاء المحتملة. يهدف هذا العقد إلى ضمان الاستقرار عند تحديث مكوّنات النظام أو تغيير قاعدة البيانات أو محرك Vanna.
+This document is the **official binding contract** between the frontend and backend for the **current** (stable) implementation.
 
-## 1. المصادقة (Authentication)
+---
 
-جميع النقاط النهائية (Endpoints) المحمية تتطلب إرسال رمز JWT في ترويسة `Authorization` باستخدام الصيغة `Bearer <token>`. ينبغي أن يحتوي الرمز على معرف المستخدم (`sub`) ودوره (`role`) ونطاقات الوصول (`scopes`). ينتهي صلاحية الرمز بعد فترة يتم تحديدها في الإعدادات.
+## 1) Authentication
 
-## 2. النقاط النهائية (Endpoints)
+Authentication is toggleable.
 
-### 2.1 ‎‎‎POST ‎‎‎`/api/v1/ask`
+* When `AUTH_ENABLED=false`, endpoints work without an `Authorization` header.
+* When `AUTH_ENABLED=true`, protected endpoints require a JWT token in the `Authorization` header: `Bearer <token>`.
 
-- **الوصف:** استقبال سؤال باللغة الطبيعية وتنفيذ عملية RAG لإنتاج SQL وتشغيله ثم بث النتائج على مراحل.
-- **طلب (Request):**
-  ```json
-  {
-    "question": "ما هو إجمالي المبيعات هذا الشهر؟",
-    "context": { "schema": "SCOTT", "examples": [] }
-  }
-  ```
-  - `question`‎ (نص): السؤال باللغة العربية أو الإنجليزية (إلزامي).
-  - `context`‎ (كائن): معلومات إضافية مثل المخطط أو أمثلة الاستعلامات (اختياري).
-- **استجابة (Response):** بث بتنسيق NDJSON عبر SSE (Server‑Sent Events)؛ كل سطر JSON يمثل مرحلة:
-  - المرحلة الأولى (data):
-    ```json
-    { "phase": "data", "sql": "SELECT ...", "rows": [...], "total_rows": 50, "timestamp": "2025-12-26T09:00:00Z" }
-    ```
-  - المرحلة الثانية (chart):
-    ```json
-    { "phase": "chart", "type": "bar", "config": { "x": "category", "y": "amount" } }
-    ```
-  - المرحلة الثالثة (summary):
-    ```json
-    { "phase": "summary", "text": "المستخدمون الأكثر إنفاقًا هم ..." }
-    ```
-  - مرحلة الخطأ (error) إذا حدث خطأ:
-    ```json
-    { "phase": "error", "message": "رسالة الخطأ" }
-    ```
-- **رموز الأخطاء المحتملة:**
-  - `invalid_query`: SQL غير صالح أو يحتوي عمليات ممنوعة.
-  - `permission_denied`: المستخدم لا يمتلك الصلاحيات اللازمة.
-  - `service_unavailable`: خطأ في قاعدة البيانات أو مزود النموذج.
-  - `unauthorized`: رمز JWT مفقود أو غير صالح.
+---
 
-### 2.2 ‎‎‎POST ‎‎‎`/api/v1/training`
+## 2) Streaming Protocol (NDJSON)
 
-- **الوصف:** إضافة عنصر تدريب (سؤال + SQL) ليتم استخدامه في الذاكرة المعززة RAG. يتطلب صلاحية `training:upload`.
-- **طلب:**
-  ```json
-  {
-    "question": "ما هي أعلى خمس منتجات مبيعا؟",
-    "sql": "SELECT * FROM products ORDER BY sales DESC FETCH FIRST 5 ROWS ONLY",
-    "metadata": { "source": "admin" }
-  }
-  ```
-- **استجابة:**
-  ```json
-  {
-    "status": "ok",
-    "message": "Training item received",
-    "data": null,
-    "error_code": null,
-    "timestamp": "2025-12-26T09:00:00Z"
-  }
-  ```
-- **رموز الأخطاء:**
-  - `permission_denied`: المستخدم ليس لديه صلاحية الرفع.
-  - `invalid_query`: في حال كان SQL مرفوضًا من جدار الحماية.
+### 2.1 Content-Type (mandatory)
 
-### 2.3 ‎‎‎GET ‎‎‎`/api/v1/health`
+All streaming responses from the ask endpoint MUST be **NDJSON over HTTP**:
 
-- **الوصف:** التحقق من جاهزية الخدمة.
-- **طلب:** بدون جسم.
-- **استجابة:**
-  ```json
-  {
-    "status": "ok",
-    "timestamp": "2025-12-26T09:00:00Z"
-  }
-  ```
+* `Content-Type: application/x-ndjson`
+* Each line is exactly one JSON object, terminated by `\n`.
+* **No SSE framing** is used in the current binding contract.
 
-## 3. نماذج البيانات (Request/Response Schemas)
+### 2.2 Unified Chunk Envelope (mandatory)
 
-يتم تعريف نماذج الطلبات عبر Pydantic، وأهمها:
+Every NDJSON line MUST use the same envelope (no extra fields):
 
-- **QueryRequest**:
-  - `question: str`
-  - `context: Optional[dict]`
-- **TrainingItem**:
-  - `question: str`
-  - `sql: str`
-  - `metadata: Optional[dict]`
-- **Response** (موحد):
-  - `status: str`
-  - `message: Optional[str]`
-  - `data: Any`
-  - `error_code: Optional[str]`
-  - `timestamp: datetime`
+```json
+{"type":"data|chart|summary|error|technical_view","payload":{}}
+```
 
-## 4. رموز الخطأ (Error Codes)
+Fields:
 
-| الرمز | الحالة | الرسالة الافتراضية | ملاحظات |
-|------|-------|-------------------|-----------|
-| `invalid_query` | 400 | SQL غير صالح | تم رفض SQL من جدار الحماية أو فشل التحقق |
-| `unauthorized` | 401 | مصادقة مطلوبة | لم يتم تقديم رمز JWT أو غير صالح |
-| `permission_denied` | 403 | ليس لديك صلاحية | دور المستخدم لا يسمح بتنفيذ العملية |
-| `service_unavailable` | 503 | الخدمة غير متاحة مؤقتًا | فشل الاتصال بقاعدة البيانات أو النموذج |
-| `internal_error` | 500 | خطأ غير متوقع | خطأ غير معروف في السيرفر |
+* `type` (string, required): one of `technical_view`, `data`, `chart`, `summary`, `error`.
+* `payload` (any JSON value, required): the phase payload (see below).
 
-## 5. ملاحظات إضافية
+---
 
-- يتم تنفيذ جميع الاستعلامات بتقييد READ‑ONLY، ولا يُسمح بأي عمليات تعديل للبيانات.
-- يتم تطبيق قيود RLS (تصفية الصفوف) بناءً على نطاقات المستخدم الموجودة في رمز JWT.
-- يدعم البث ثلاث مراحل كما هو موضح؛ يمكن للواجهة الأمامية إظهار المؤشرات أثناء انتظار كل مرحلة.
+## 3) Endpoints
+
+### 3.1 POST `/api/v1/ask`
+
+**Description:** Receives a natural language question, generates SQL, executes it (read-only), and streams results in strict phases.
+
+#### Request (JSON body)
+
+```json
+{
+  "question": "What is the total sales this month?",
+  "context": {"schema": "SCOTT", "examples": []},
+  "top_k": 5
+}
+```
+
+* `question` (string, required)
+* `context` (object, optional)
+* `top_k` (integer, optional, default `5`) — reserved for RAG retrieval control.
+
+> Note: `top_k` MUST be accepted in the request body to avoid validation errors (HTTP 422).
+
+#### Response (NDJSON stream)
+
+The response is streamed as `application/x-ndjson` with the **strict order**:
+
+1) `technical_view`
+2) `data`
+3) `chart`
+4) `summary`
+
+##### Chunk 1: `technical_view`
+
+`payload` MUST include (TechnicalView concept):
+
+```json
+{
+  "sql": "SELECT ...",
+  "assumptions": ["..."],
+  "is_safe": true
+}
+```
+
+##### Chunk 2: `data`
+
+`payload` MUST be a list of row objects:
+
+```json
+[
+  {"col1": "value", "col2": 123}
+]
+```
+
+##### Chunk 3: `chart`
+
+`payload` MUST be a chart recommendation object:
+
+```json
+{
+  "chart_type": "bar",
+  "x": "column_name",
+  "y": "column_name"
+}
+```
+
+Allowed `chart_type` values (current stable set): `bar`, `line`, `pie`.
+
+##### Chunk 4: `summary`
+
+`payload` MUST be a string:
+
+```json
+"ok"
+```
+
+##### Error chunk: `error`
+
+If an error occurs, the backend MUST still return a valid NDJSON chunk:
+
+```json
+{
+  "message": "Error message content",
+  "error_code": "internal_error"
+}
+```
+
+---
+
+## 4) Error Codes
+
+| Code | Status | Default Message | Notes |
+| --- | --- | --- | --- |
+| `invalid_query` | 400 | Invalid SQL | SQL rejected by firewall or validation failed |
+| `unauthorized` | 401 | Authentication required | JWT token missing or invalid |
+| `permission_denied` | 403 | Access denied | User role does not allow this operation |
+| `service_unavailable` | 503 | Service temporarily unavailable | Database or model provider failed |
+| `internal_error` | 500 | Unexpected error | Unknown server error |
+
+---
+
+## 5) Additional Notes
+
+* All SQL MUST be read-only (SELECT-only).
+* RLS (Row-Level Security) constraints are applied only when enabled.

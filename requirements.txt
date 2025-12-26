@@ -1,27 +1,55 @@
+# ============================================================================
 # Core framework
+# ============================================================================
 fastapi
-uvicorn
-pydantic
+uvicorn[standard]
+pydantic>=2.0
 pydantic-settings
 
-# Database drivers
-oracledb==2.0.1  # Oracle database driver replacing cx_Oracle
-pyodbc==5.1.0    # MSSQL ODBC driver
+# ============================================================================
+# Database / ORM
+# ============================================================================
 sqlalchemy>=2.0
+oracledb>=2.0       # Keeps compatibility with your OracleProvider logic
+pyodbc>=5.0
+pydantic-settings
+sqlparse
+asyncpg
+# ============================================================================
+# AI Core & LLM Clients (Explicit is better than implicit)
+# ============================================================================
+vanna==2.0.1
+openai>=1.0.0       # Required for Phi3Provider & OpenAIProvider
+groq>=0.5.0         # Required for GroqProvider
+# google-generativeai # Uncomment if using GoogleProvider implementation
 
+# ============================================================================
 # Vector store clients
-chromadb>=0.4
-qdrant-client>=1.5
+# ============================================================================
+chromadb>=0.4.0,<0.6.0  # Stick to stable versions
+qdrant-client>=1.7.0
 
-# Additional utilities
+# ============================================================================
+# Security (Matching app/core/security.py)
+# ============================================================================
+# Using python-jose because code imports 'jose'
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]     # Often needed for password hashing if you add user management
+
+# ============================================================================
+# Utilities
+# ============================================================================
 python-dotenv
 ujson
 structlog
 prometheus-client
 sqlparse
 
-# Testing
+# ============================================================================
+# Testing / Quality
+# ============================================================================
 pytest
 mypy
 black
 ruff
+httpx               # Required for TestClient

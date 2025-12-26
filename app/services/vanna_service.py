@@ -10,6 +10,7 @@ class VannaService:
         self,
         question: str,
         user_context: UserContext,
+        top_k: int = 5,
     ) -> dict:
         """
         Process natural language question.
@@ -27,6 +28,9 @@ class VannaService:
             - Service doesn't care if user is authenticated
         """
         
+        # NOTE: top_k is reserved for future RAG retrieval controls.
+        # It is currently accepted for API contract stability.
+
         # Generate SQL from question
         sql = await self.generate_sql(question)
         

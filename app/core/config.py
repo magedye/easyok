@@ -1,33 +1,224 @@
-from pydantic_settings import BaseSettings
-from typing import Literal
+"""
+EasyData Configuration
+======================
+
+This module loads and validates ALL environment variables using Pydantic v2.
+It is the SINGLE source of truth for application settings.
+
+Requirements:
+    pip install pydantic-settings
+"""
+
+from functools import lru_cache
+from typing import Literal, Optional, Any
+
+from pydantic import Field, field_validator, ValidationInfo
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
-    # -------------------------------------------------
+    # =========================================================================
     # Application
-    # -------------------------------------------------
+    # =========================================================================
     APP_NAME: str = "EasyData"
     APP_VERSION: str = "16.0.0"
+    APP_ENV: Literal["development", "staging", "production"] = "development"
     DEBUG: bool = False
 
-    # -------------------------------------------------
-    # Security Toggles (CRITICAL)
-    # -------------------------------------------------
+    # =========================================================================
+    # Core Provider Selectors (SSOT)
+    # =========================================================================
+    DB_PROVIDER: Literal["oracle", "mssql"]
+    LLM_PROVIDER: Literal[
+        "openai",
+        "google",
+        "ollama",
+        "openai_compatible",
+        "groq",
+    ]
+    VECTOR_DB: Literal["chromadb", "qdrant"]
+
+    # =========================================================================
+    # Security Toggles
+    # =========================================================================
     AUTH_ENABLED: bool = True
     RBAC_ENABLED: bool = True
     RLS_ENABLED: bool = True
 
-    # -------------------------------------------------
-    # JWT Configuration (SSOT)
-    # -------------------------------------------------
-    JWT_SECRET_KEY: str
-    JWT_ALGORITHM: str = "HS256"
+    # =========================================================================
+    # Feature Toggles
+    # =========================================================================
+    ENABLE_LOGGING: bool = True
+    ENABLE_AUDIT_LOGGING: bool = True
+    ENABLE_RATE_LIMIT: bool = False
+    ENABLE_GZIP_COMPRESSION: bool = True
+    ENABLE_PERFORMANCE: bool = True
+
+    # =========================================================================
+    # JWT (Validation Only – External Identity)
+    # =========================================================================
+    JWT_ALGORITHM: Literal["HS256", "RS256", "ES256"] = "HS256"
+    JWT_SECRET_KEY: Optional[str] = None
+    JWT_PUBLIC_KEY: Optional[str] = None
+    JWT_JWKS_URL: Optional[str] = None
     JWT_EXPIRATION_MINUTES: int = 60
+    JWT_ISSUER: Optional[str] = None
+    JWT_AUDIENCE: Optional[str] = None
+    JWT_HEADER_NAME: str = "Authorization"
+    JWT_HEADER_PREFIX: str = "Bearer"
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    # =========================================================================
+    # Authorization / RBAC
+    # =========================================================================
+    RBAC_ROLES_CLAIM: str = "roles"
+    RBAC_DEFAULT_ROLE: str = "viewer"
+    RBAC_ADMIN_ROLE: str = "admin"
 
-settings = Settings()
+    # =========================================================================
+    # Row Level Security (RLS)
+    # =========================================================================
+    RLS_SCOPE_CLAIM: str = "tenant_id"
+    RLS_MISSING_SCOPE_BEHAVIOR: Literal["deny", "allow"] = "deny"
 
+    # =========================================================================
+    # Databases
+    # =========================================================================
+    ORACLE_CONNECTION_STRING: Optional[str] = None
+    MSSQL_CONNECTION_STRING: Optional[str] = None
+
+    SYSTEM_DB_TYPE: Literal["sqlite", "postgres"] = "sqlite"
+    SYSTEM_DB_PATH: str = "./data/logs.db"
+
+    # =========================================================================
+    # Vector Store
+    # =========================================================================
+    VECTOR_STORE_PATH: str = "./data/vectorstore"
+    QDRANT_URL: Optional[str] = None
+    QDRANT_API_KEY: Optional[str] = None
+
+    # =========================================================================
+    # LLM Providers
+    # =========================================================================
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_TIMEOUT: int = 30
+
+    GOOGLE_API_KEY: Optional[str] = None
+    GOOGLE_MODEL: str = "gemini-1.5-pro"
+
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3"
+
+    PHI3_BASE_URL: str = "http://localhost:1234/v1"
+    PHI3_MODEL: str = "phi-3"
+    PHI3_API_KEY: Optional[str] = None
+    PHI3_TIMEOUT: int = 30
+
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_TIMEOUT: int = 30
+
+    # =========================================================================
+    # Shared LLM Controls (Deterministic Mode)
+    # =========================================================================
+    LLM_TEMPERATURE: float = Field(0.1, ge=0.0, le=1.0)
+    LLM_MAX_TOKENS: int = 2048
+    LLM_REQUEST_TIMEOUT: int = 60
+
+    # =========================================================================
+    # RAG / Vanna
+    # =========================================================================
+    RAG_TOP_K: int = 5
+    MAX_SQL_TOKENS: int = 2000
+    VANNA_ALLOW_DDL: bool = False
+    VANNA_MAX_ROWS: int = 500
+
+    # =========================================================================
+    # Rate Limiting & Health
+    # =========================================================================
+    RATE_LIMIT_REQUESTS_PER_MINUTE: int = 60
+    RATE_LIMIT_SCOPE: Literal["user", "ip", "global"] = "user"
+
+    HEALTH_CHECK_ENABLED: bool = True
+    HEALTH_CHECK_TIMEOUT: int = 5
+    HEALTH_AGGREGATION_MODE: Literal["strict", "degraded"] = "degraded"
+
+    # =========================================================================
+    # Pydantic Settings Configuration
+    # =========================================================================
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
+
+    # =========================================================================
+    # Validators (Fail-Fast Logic)
+    # =========================================================================
+
+    @field_validator("RBAC_ENABLED", "RLS_ENABLED", mode="after")
+    @classmethod
+    def force_disable_if_no_auth(cls, v: Any, info: ValidationInfo) -> bool:
+        """
+        If AUTH_ENABLED is False, RBAC and RLS must be disabled
+        regardless of their explicit values.
+        """
+        if not info.data.get("AUTH_ENABLED", True):
+            return False
+        return v
+
+    @field_validator("JWT_SECRET_KEY")
+    @classmethod
+    def validate_jwt_secret(
+        cls, v: Optional[str], info: ValidationInfo
+    ) -> Optional[str]:
+        """
+        JWT_SECRET_KEY is required only when:
+        - AUTH_ENABLED is True
+        - JWT_ALGORITHM is HS256
+        """
+        if not info.data.get("AUTH_ENABLED", True):
+            return None
+
+        if info.data.get("JWT_ALGORITHM") == "HS256" and not v:
+            raise ValueError(
+                "JWT_SECRET_KEY is required when AUTH_ENABLED is true "
+                "and JWT_ALGORITHM is HS256"
+            )
+        return v
+
+    @field_validator("ORACLE_CONNECTION_STRING")
+    @classmethod
+    def validate_oracle_conn(
+        cls, v: Optional[str], info: ValidationInfo
+    ) -> Optional[str]:
+        if info.data.get("DB_PROVIDER") == "oracle" and not v:
+            raise ValueError(
+                "ORACLE_CONNECTION_STRING is mandatory when DB_PROVIDER is 'oracle'"
+            )
+        return v
+
+    @field_validator("MSSQL_CONNECTION_STRING")
+    @classmethod
+    def validate_mssql_conn(
+        cls, v: Optional[str], info: ValidationInfo
+    ) -> Optional[str]:
+        if info.data.get("DB_PROVIDER") == "mssql" and not v:
+            raise ValueError(
+                "MSSQL_CONNECTION_STRING is mandatory when DB_PROVIDER is 'mssql'"
+            )
+        return v
+
+
+@lru_cache()
 def get_settings() -> Settings:
-    return settings
+    """
+    Cached access to application settings.
+    This is the ONLY supported way to access configuration.
+    """
+    return Settings()
+
+
+# Global settings instance (explicit, intentional)
+settings = get_settings()

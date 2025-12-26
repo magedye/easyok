@@ -1,0 +1,212 @@
+openapi: 3.0.3
+
+info:
+  title: EasyData Future OpenAPI Reference (v16+)
+  version: "16.4.0-reference"
+  description: |
+    Reference OpenAPI spec for the future (advanced) streaming engine.
+
+    This file is intentionally **forward-looking** and is NOT the binding
+    runtime contract. The binding runtime contract for `/api/v1/ask` is NDJSON
+    as documented in `AskResponse_NDJSON_Schema.md`.
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: EasyData API
+
+tags:
+  - name: Streaming
+    description: Real-time RAG interactions (future)
+  - name: System
+    description: Health and readiness
+
+paths:
+
+  /chat/stream:
+    post:
+      tags: [Streaming]
+      summary: Start a RAG-First Streaming Session (future)
+      operationId: startChatStream
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: SSE stream established (future)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /health:
+    get:
+      tags: [System]
+      summary: Deep System Health Check (future)
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+components:
+
+  schemas:
+
+    ChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        datasource_id:
+          type: string
+          format: uuid
+          nullable: true
+        conversation_id:
+          type: string
+          format: uuid
+          nullable: true
+        language:
+          type: object
+          properties:
+            code:
+              type: string
+              enum: [ar, en, auto]
+            direction:
+              type: string
+              enum: [rtl, ltr]
+
+    # ------------------------------------------------------------------
+    # STREAM EVENTS (future)
+    # ------------------------------------------------------------------
+
+    StreamEvent:
+      oneOf:
+        - $ref: "#/components/schemas/EventAuth"
+        - $ref: "#/components/schemas/EventThinking"
+        - $ref: "#/components/schemas/EventContext"
+        - $ref: "#/components/schemas/EventTechnicalView"
+        - $ref: "#/components/schemas/EventData"
+        - $ref: "#/components/schemas/EventChart"
+        - $ref: "#/components/schemas/EventSummary"
+        - $ref: "#/components/schemas/EventError"
+        - $ref: "#/components/schemas/EventDone"
+
+    EventAuth:
+      type: object
+      properties:
+        status: { enum: ["authenticated"] }
+
+    EventThinking:
+      type: object
+      properties:
+        stage:
+          enum: [retrieval, generation, validation, execution]
+        message:
+          type: string
+
+    EventContext:
+      type: object
+      required: [sources]
+      properties:
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { enum: [sql_pair, ddl, doc] }
+              relevance: { type: number }
+              snippet: { type: string }
+
+    EventTechnicalView:
+      type: object
+      required: [sql, is_safe, assumptions, dialect, datasource_type]
+      properties:
+        sql:
+          type: string
+        is_safe:
+          type: boolean
+        dialect:
+          type: string
+          enum: [oracle, postgresql, mssql, sqlite]
+        datasource_type:
+          type: string
+          enum: [oracle, postgresql, mssql, sqlite]
+        assumptions:
+          type: array
+          items: { type: string }
+        execution_time_ms:
+          type: integer
+
+    EventData:
+      type: object
+      properties:
+        rows:
+          type: array
+          items: { type: object }
+        columns:
+          type: array
+          items: { type: string }
+        row_count:
+          type: integer
+        chunk_index:
+          type: integer
+        is_last_chunk:
+          type: boolean
+
+    EventChart:
+      type: object
+      required: [type, config]
+      properties:
+        type:
+          enum: [bar, line, pie, scatter, table, indicator]
+        config:
+          type: object
+
+    EventSummary:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+        language:
+          enum: [ar, en]
+
+    EventDone:
+      type: object
+      required: [status]
+      properties:
+        status:
+          enum: ["completed"]
+
+    EventError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        suggestion:
+          type: string
+
+    # ------------------------------------------------------------------
+    # HEALTH (future)
+    # ------------------------------------------------------------------
+
+    HealthResponse:
+      type: object
+      required: [status, components]
+      properties:
+        status:
+          enum: [ok, degraded]
+        components:
+          type: object
+          properties:
+            database_pool: { type: boolean }
+            vector_store: { type: boolean }
+            llm_gateway: { type: boolean }

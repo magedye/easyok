@@ -14,6 +14,7 @@ class QueryRequest(BaseModel):
 
     question: str
     context: Optional[dict] = None
+    top_k: int = 5
 
 
 class TrainingItem(BaseModel):

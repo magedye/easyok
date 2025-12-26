@@ -26,11 +26,11 @@ def create_llm_provider(settings: Settings) -> BaseLLMProvider:
         return OllamaProvider(settings)
 
     if provider == "phi3":
-            from app.providers.llm.phi3_provider import Phi3Provider
-            return Phi3Provider(settings)
-    
-        if provider == "groq":
-            from app.providers.llm.groq_provider import GroqProvider
-            return GroqProvider(settings)
-    
-        raise ValueError(f"Unsupported LLM provider: {provider}")
+        from app.providers.llm.phi3_provider import Phi3Provider
+        return Phi3Provider(settings)
+
+    if provider == "groq":
+        from app.providers.llm.groq_provider import GroqProvider
+        return GroqProvider(settings)
+
+    raise ValueError(f"Unsupported LLM provider: {provider}")

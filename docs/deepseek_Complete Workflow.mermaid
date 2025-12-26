@@ -1,0 +1,90 @@
+graph TD
+    %% ========== ENHANCED SECTION: USER INPUT & FRONTEND ==========
+    A[User enters question (AR/EN)] --> B[Frontend: ChatPage.tsx]
+    B --> C{Bilingual Processing}
+    C --> D[AR: RTL Layout + EN: LTR Layout]
+    D --> E[Validation: SQL Firewall (Client-side)]
+    E --> F[Encode + SSE Stream Initiation]
+
+    %% ========== ENHANCED SECTION: BACKEND AUTH & SECURITY ==========
+    F --> G[Backend: JWT Auth + Route Guard]
+    G --> H{Role Check}
+    H -- Admin --> I[Access to Training Service & Admin Endpoints]
+    H -- Analyst --> J[Access to Query Assets + Dashboards]
+    H -- Viewer --> K[Read-only Access to Shared Assets]
+    
+    %% ========== ENHANCED SECTION: RAG-FIRST AI PROCESSING ==========
+    I --> L[RAG Context Retrieval from ChromaDB]
+    J --> L
+    K --> L
+    L --> M{Context Retrieved?}
+    M -- Yes --> N[Vanna Agent: AI Processing with Context]
+    M -- No --> O[Fallback: Schema Introspection Only]
+    O --> P[Limited SQL Generation]
+    N --> Q[Full SQL Generation with Assumptions]
+
+    %% ========== ENHANCED SECTION: SQL GENERATION & VALIDATION ==========
+    Q --> R{SQL Generation Success}
+    R -- Success --> S[SQL Firewall Deep Validation]
+    R -- Fail --> T[Error Handling + RAG Quality Metrics]
+    S --> U[Read-only Enforcement Check]
+    U --> V[Query Optimization: LIMIT, Timeout]
+    
+    %% ========== ENHANCED SECTION: DATABASE EXECUTION FACTORY ==========
+    V --> W[SQLExecutor: Factory Pattern]
+    W --> X{Database Type Detection}
+    X -- Oracle --> Y[OracleConnector: FETCH FIRST syntax]
+    X -- MSSQL --> Z[MSSQLConnector: TOP syntax]
+    X -- PostgreSQL --> AA[PostgreSQLConnector: LIMIT syntax]
+    Y --> AB[Execute with Read-only Role]
+    Z --> AB
+    AA --> AB
+    
+    %% ========== ENHANCED SECTION: RESULTS PROCESSING ==========
+    AB --> AC[Format Results with Type Inference]
+    AC --> AD[Dual-View Creation: Business + Technical]
+    AD --> AE[Chart Type Auto-detection]
+    AE --> AF[Visualization Config Generation]
+    
+    %% ========== ENHANCED SECTION: ASSET & TRAINING MANAGEMENT ==========
+    AF --> AG[Query Asset Creation/Update]
+    AG --> AH{User Action}
+    AH -- Save Asset --> AI[Persist as QueryAsset]
+    AH -- Mark Valid --> AJ[Add to Training Pipeline]
+    AH -- Pin --> AK[Add to Personal/Org Dashboard]
+    AI --> AL[Update Asset Metadata]
+    AJ --> AM[Training Service: 5-Pillar Update]
+    AK --> AN[Dashboard Service: Widget Creation]
+    
+    %% ========== ENHANCED SECTION: OBSERVABILITY & GOVERNANCE ==========
+    AL --> AO[Observability: Record All Metrics]
+    AM --> AO
+    AN --> AO
+    AO --> AP[RAG Quality Metrics Update]
+    AP --> AQ[Assumption Tracking & Storage]
+    AQ --> AR[Audit Logging: Immutable Record]
+    AR --> AS[Compliance: GDPR/Data Governance]
+    
+    %% ========== ENHANCED SECTION: RESPONSE STREAMING ==========
+    AS --> AT[SSE Response Streaming]
+    AT --> AU[Frontend: Progressive Display]
+    AU --> AV[Render: Chart/Table/JSON Dual-View]
+    AV --> AW[User Feedback Collection]
+    AW --> AX[Continuous Training Loop]
+
+    %% ========== ENHANCED SECTION: POST-PROCESSING ==========
+    AX --> AY[Schema Drift Detection]
+    AY --> AZ[Training Rollback Capability]
+    AZ --> BA[Health Monitoring & Alerting]
+    BA --> BB[System Metrics Dashboard Update]
+
+    %% ========== STYLING ==========
+    classDef security fill:#ffcccc,stroke:#333,stroke-width:2px
+    classDef ai fill:#ccffcc,stroke:#333,stroke-width:2px
+    classDef asset fill:#ccccff,stroke:#333,stroke-width:2px
+    classDef observe fill:#ffcc99,stroke:#333,stroke-width:2px
+    
+    class E,G,S,U security
+    class L,N,Q,R,T ai
+    class AG,AI,AJ,AK,AM,AN asset
+    class AO,AP,AQ,AR,AS,AY,AZ,BA observe
