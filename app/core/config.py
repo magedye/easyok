@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     ENABLE_RATE_LIMIT: bool = False
     ENABLE_GZIP_COMPRESSION: bool = True
     ENABLE_PERFORMANCE: bool = True
+    # CORS configuration to allow frontend origin
+    CORS_ORIGINS: list = ['http://localhost:3000']  # Assuming frontend runs at localhost:3000
+    BACKEND_PORT: int = 8000  # Ensuring backend runs on port 8000
 
     # =========================================================================
     # JWT (Validation Only – External Identity)

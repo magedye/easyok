@@ -22,7 +22,7 @@ def test_ask_endpoint_streaming_contract_no_auth():
 
     Validates:
     - NDJSON streaming
-    - Strict chunk order: data -> chart -> summary
+    - Strict chunk order: technical_view -> data -> chart -> summary
     - Minimal schema correctness
     """
 
@@ -45,18 +45,29 @@ def test_ask_endpoint_streaming_contract_no_auth():
     chunks = parse_ndjson(response.text)
 
     # ---- Contract: exact order ----
-    assert len(chunks) >= 3, "Expected at least 3 NDJSON chunks"
+    assert len(chunks) >= 4, "Expected at least 4 NDJSON chunks"
 
-    assert chunks[0]["type"] == "data"
-    assert chunks[1]["type"] == "chart"
-    assert chunks[2]["type"] == "summary"
+    assert chunks[0]["type"] == "technical_view"
+    assert chunks[1]["type"] == "data"
+    assert chunks[2]["type"] == "chart"
+    assert chunks[3]["type"] == "summary"
 
     # ---- Contract: schema ----
-    for chunk in chunks[:3]:
+    for chunk in chunks[:4]:
         assert "type" in chunk
         assert "payload" in chunk
 
     # ---- Contract: payload sanity ----
-    assert isinstance(chunks[0]["payload"], list)      # data
-    assert isinstance(chunks[1]["payload"], dict)      # chart config
-    assert isinstance(chunks[2]["payload"], str)       # summary text
+    assert isinstance(chunks[0]["payload"], dict)      # technical_view
+    assert isinstance(chunks[0]["payload"].get("sql"), str)
+    assert isinstance(chunks[0]["payload"].get("assumptions"), list)
+    assert isinstance(chunks[0]["payload"].get("is_safe"), bool)
+
+    assert isinstance(chunks[1]["payload"], list)      # data
+
+    assert isinstance(chunks[2]["payload"], dict)      # chart
+    assert chunks[2]["payload"].get("chart_type") in {"bar", "line", "pie"}
+    assert isinstance(chunks[2]["payload"].get("x"), str)
+    assert isinstance(chunks[2]["payload"].get("y"), str)
+
+    assert isinstance(chunks[3]["payload"], str)       # summary text

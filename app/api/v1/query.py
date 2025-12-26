@@ -5,10 +5,10 @@ from fastapi.responses import StreamingResponse
 
 from app.api.dependencies import optional_auth, UserContext
 from app.models.request import QueryRequest
-from app.services.vanna_service import VannaService
+from app.services.orchestration_service import OrchestrationService
 
 router = APIRouter()
-vanna_service = VannaService()
+orchestration_service = OrchestrationService()
 
 
 @router.post("/ask")
@@ -30,44 +30,57 @@ async def ask(
         Query result with optional RLS filtering
     """
     async def ndjson_stream():
-        """Stream NDJSON chunks in strict order: data -> chart -> summary."""
+        """Stream NDJSON chunks in strict order: technical_view -> data -> chart -> summary."""
 
-        # NOTE: Keep chunk schema aligned with tests: {"type": ..., "payload": ...}
+        # NOTE: Runtime contract is authoritative in AskResponse_NDJSON_Schema.md:
+        # {"type": "...", "payload": ...}
         try:
-            result = await vanna_service.ask(
+            technical_view = await orchestration_service.prepare(
                 question=request.question,
                 top_k=request.top_k,
                 user_context=user,
             )
 
-            # Phase 1: data (payload must be a list)
-            rows = result.get("rows") if isinstance(result, dict) else None
-            if isinstance(rows, list):
-                data_payload = rows
-            elif isinstance(result, list):
-                data_payload = result
-            else:
-                data_payload = [result] if result is not None else []
+            # Chunk 1: technical_view
+            yield json.dumps({"type": "technical_view", "payload": technical_view}) + "\n"
 
+            # If unsafe, emit error chunk and stop (stream stays HTTP 200)
+            if not technical_view.get("is_safe", False):
+                yield json.dumps(
+                    {
+                        "type": "error",
+                        "payload": {
+                            "message": "SQL rejected by guard",
+                            "error_code": "invalid_query",
+                        },
+                    }
+                ) + "\n"
+                return
+
+            raw_result = await orchestration_service.execute_sql(technical_view["sql"])
+            data_payload = orchestration_service.normalise_rows(raw_result)
+
+            # Chunk 2: data (payload must be a list)
             yield json.dumps({"type": "data", "payload": data_payload}) + "\n"
 
-            # Phase 2: chart (payload must be a dict)
-            chart_payload = {
-                "type": "table",
-                "config": {},
-            }
+            # Chunk 3: chart (payload must be a dict with chart_type/x/y)
+            chart_payload = orchestration_service.chart_recommendation(data_payload)
             yield json.dumps({"type": "chart", "payload": chart_payload}) + "\n"
 
-            # Phase 3: summary (payload must be a string)
-            summary_payload = (
-                result.get("summary")
-                if isinstance(result, dict) and isinstance(result.get("summary"), str)
-                else "ok"
-            )
+            # Chunk 4: summary (payload must be a string)
+            summary_payload = orchestration_service.summary_text(raw_result)
             yield json.dumps({"type": "summary", "payload": summary_payload}) + "\n"
 
         except Exception as e:
-            # Keep streaming contract even on failure
-            yield json.dumps({"type": "error", "payload": str(e)}) + "\n"
+            # Keep streaming contract even on failure (after start)
+            yield json.dumps(
+                {
+                    "type": "error",
+                    "payload": {
+                        "message": str(e),
+                        "error_code": "internal_error",
+                    },
+                }
+            ) + "\n"
 
     return StreamingResponse(ndjson_stream(), media_type="application/x-ndjson")
