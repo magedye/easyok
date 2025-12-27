@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     # CORS configuration to allow frontend origin
     CORS_ORIGINS: list = ['http://localhost:3000']  # Assuming frontend runs at localhost:3000
     BACKEND_PORT: int = 8000  # Ensuring backend runs on port 8000
+    STREAM_PROTOCOL: Literal["ndjson", "sse"] = "ndjson"
 
     # =========================================================================
     # JWT (Validation Only – External Identity)
@@ -86,6 +87,7 @@ class Settings(BaseSettings):
     # =========================================================================
     # Databases
     # =========================================================================
+    DB_TYPE: Literal["oracle", "mssql", "postgres"] = "oracle"
     ORACLE_CONNECTION_STRING: Optional[str] = None
     MSSQL_CONNECTION_STRING: Optional[str] = None
 
@@ -135,6 +137,7 @@ class Settings(BaseSettings):
     MAX_SQL_TOKENS: int = 2000
     VANNA_ALLOW_DDL: bool = False
     VANNA_MAX_ROWS: int = 500
+    DEFAULT_ROW_LIMIT: int = 100
 
     # =========================================================================
     # Rate Limiting & Health
@@ -252,6 +255,15 @@ class Settings(BaseSettings):
                 "MSSQL_CONNECTION_STRING is mandatory when DB_PROVIDER is 'mssql'"
             )
         return v
+
+    @field_validator("DB_TYPE", mode="after")
+    @classmethod
+    def align_db_type(cls, v: str, info: ValidationInfo) -> str:
+        """
+        Keep DB_TYPE aligned with DB_PROVIDER to simplify dialect checks.
+        """
+        provider = info.data.get("DB_PROVIDER")
+        return (provider or v).lower()
 
 
 _settings_cache: Optional[Settings] = None

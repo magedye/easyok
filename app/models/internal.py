@@ -15,6 +15,7 @@ from sqlalchemy import (
     Boolean,
     Float,
     ForeignKey,
+    Index,
 )
 from sqlalchemy.orm import declarative_base
 from datetime import datetime
@@ -30,6 +31,10 @@ class AuditLog(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(String(255), nullable=False, index=True)
+    role = Column(String(50), nullable=False, default="guest", index=True)
+    action = Column(String(100), nullable=False, index=True)
+    resource_id = Column(String(255), nullable=True)
+    payload = Column(Text, nullable=True)
     question = Column(Text, nullable=False)
     sql = Column(Text, nullable=False)
     status = Column(String(50), nullable=False)  # success, failed, timeout
@@ -38,6 +43,12 @@ class AuditLog(Base):
     row_count = Column(Integer)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     correlation_id = Column(String(255), unique=True, index=True)
+    outcome = Column(String(50), nullable=False, default="success")
+
+    __table_args__ = (
+        Index("idx_audit_user_ts", "user_id", "timestamp"),
+        Index("idx_audit_action_ts", "action", "timestamp"),
+    )
 
 
 class TrainingData(Base):
@@ -68,6 +79,7 @@ class UserFeedback(Base):
     is_valid = Column(Boolean)  # True if the user validated the result
     comment = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    training_item_id = Column(Integer, ForeignKey("training_items.id"), nullable=True)
 
 
 class UserCapability(Base):
@@ -92,3 +104,33 @@ class UserDataScope(Base):
     user_id = Column(String(255), nullable=False)
     column_name = Column(String(255), nullable=False)
     allowed_values = Column(Text, nullable=False)  # JSON string of allowed values
+
+
+class TrainingItem(Base):
+    """Governed training items (pending/approved)."""
+
+    __tablename__ = "training_items"
+
+    id = Column(Integer, primary_key=True)
+    item_type = Column(String(50), nullable=False)  # ddl | sql | doc
+    payload = Column(Text, nullable=False)  # JSON string
+    status = Column(String(20), default="pending")  # pending | approved | rejected
+    created_at = Column(DateTime, default=datetime.utcnow)
+    approved_at = Column(DateTime, nullable=True)
+    approved_by = Column(String(255), nullable=True)
+    created_by = Column(String(255), nullable=True)
+
+
+class AssetQuery(Base):
+    """Saved successful query assets."""
+
+    __tablename__ = "asset_queries"
+
+    id = Column(Integer, primary_key=True)
+    question = Column(Text, nullable=False)
+    sql = Column(Text, nullable=False)
+    assumptions = Column(Text, nullable=False)
+    chart_config = Column(Text, nullable=False)
+    semantic_context = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String(255), nullable=True)

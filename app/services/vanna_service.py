@@ -181,3 +181,20 @@ class VannaService:
         except Exception as exc:  # pragma: no cover - external DB failures
             logger.exception("Database execution failed")
             return {"error": str(exc)}
+
+    def referenced_tables(self, sql: str) -> list[tuple]:
+        """Return list of (owner, table) tuples referenced in FROM/JOIN clauses."""
+        import re
+
+        if not sql:
+            return []
+        matches = re.findall(r"(?:FROM|JOIN)\s+([\"A-Za-z0-9_\.]+)", sql, re.I)
+        out = []
+        for m in matches:
+            identifier = m.strip().strip('"')
+            if "." in identifier:
+                owner, tbl = identifier.split(".", 1)
+                out.append((owner.upper(), tbl.upper()))
+            else:
+                out.append(("", identifier.upper()))
+        return out

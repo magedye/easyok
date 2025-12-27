@@ -68,16 +68,4 @@ def create_vector_provider(settings: Settings):
 
         return QdrantProvider(settings)
 
-    raise ValueError(f"Unsupported vector provider: {provider}")
-
-
-def create_vector_provider(settings: Settings):
-    """Return a concrete vector provider based on settings.VECTOR_DB."""
-    provider = settings.VECTOR_DB.lower()
-
-    if provider == "chromadb":
-        from app.providers.vector.chroma_provider import ChromaProvider
-
-        return ChromaProvider(settings)
-
     raise ValueError(f"Unsupported VECTOR DB provider: {provider}")

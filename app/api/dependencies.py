@@ -18,6 +18,32 @@ ANONYMOUS_CONTEXT: UserContext = {
     "is_authenticated": False,
 }
 
+# ============================================================================
+# Role -> Permissions mapping (server-side RBAC)
+# ============================================================================
+
+ROLE_PERMISSION_MAP = {
+    "viewer": ["query:execute"],
+    "analyst": [
+        "query:execute",
+        "asset:read",
+        "asset:write",
+        "training:upload",
+        "feedback:submit",
+    ],
+    "admin": [
+        "query:execute",
+        "asset:read",
+        "asset:write",
+        "asset:delete",
+        "training:upload",
+        "training:approve",
+        "training:purge",
+        "audit:view",
+        "feedback:submit",
+    ],
+}
+
 
 # ============================================================================
 # Token Extraction (Clear Responsibility)
@@ -96,11 +122,15 @@ async def optional_auth(request: Request) -> UserContext:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {str(e)}",
         )
-    
+
+    role = payload.get("role", "user")
+    # server-side permissions derived from role if not provided
+    perms = payload.get("permissions") or ROLE_PERMISSION_MAP.get(role, [])
+
     return {
         "user_id": payload.get("sub", "unknown"),
-        "role": payload.get("role", "user"),
-        "permissions": payload.get("permissions", []),
+        "role": role,
+        "permissions": perms,
         "data_scope": payload.get("data_scope", {}),
         "is_authenticated": True,
     }

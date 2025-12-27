@@ -15,11 +15,13 @@ from typing import Any, Dict, List
 
 from app.api.dependencies import UserContext
 from app.services.vanna_service import VannaService
+from app.utils.sql_guard import SQLGuard
 
 
 class OrchestrationService:
     def __init__(self) -> None:
         self.vanna_service = VannaService()
+        self.sql_guard = SQLGuard(self.vanna_service.settings)
 
     async def prepare(
         self,
@@ -42,64 +44,17 @@ class OrchestrationService:
                 user_context.get("data_scope", {}),
             )
 
-        # Safety checks: ensure the SQL references tables that exist in the connected DB
-        # and restrict to SELECT-only queries
-        is_safe = self._is_safe_sql(sql)
-
-        # Additional table validation: extract referenced tables and confirm they exist
         tables = self._referenced_tables(sql)
         if tables:
-            missing = []
-            for owner, tbl in tables:
-                try:
-                    # If owner not provided, check across all owners
-                    if owner:
-                        check_sql = "SELECT COUNT(1) AS cnt FROM ALL_TABLES WHERE OWNER = :o AND TABLE_NAME = :t"
-                        res = self.vanna_service.db.execute(check_sql.replace(':o', f"'{owner}'").replace(':t', f"'{tbl}'"))
-                    else:
-                        check_sql = "SELECT COUNT(1) AS cnt FROM ALL_TABLES WHERE TABLE_NAME = :t"
-                        res = self.vanna_service.db.execute(check_sql.replace(':t', f"'{tbl}'"))
-                    cnt = 0
-                    if res and isinstance(res, list) and isinstance(res[0], dict):
-                        cnt = int(list(res[0].values())[0])
-                    if cnt == 0:
-                        missing.append(f"{owner + '.' if owner else ''}{tbl}")
-                except Exception:
-                    # On errors, be conservative and mark as missing
-                    missing.append(f"{owner + '.' if owner else ''}{tbl}")
+            assumptions.extend([f"Assuming table {owner + '.' if owner else ''}{tbl} exists" for owner, tbl in tables])
+        if not assumptions:
+            assumptions.append("Assuming schema is trained and referenced columns exist.")
 
-            if missing:
-                # Attempt a fallback rewrite using the DDL docs stored in vector store (if available)
-                rewritten = False
-                if getattr(self.vanna_service, 'vector', None):
-                    try:
-                        col = self.vanna_service.vector.client.get_collection('ddl')
-                        docs = col.get()
-                        dd_ids = docs.get('ids', [])
-                        # pick the first DDL id and parse owner.table
-                        if dd_ids:
-                            first = dd_ids[0]
-                            parts = first.split('.')
-                            if len(parts) >= 3:
-                                owner_name = parts[0]
-                                table_name = parts[2]
-                                # Replace missing names (case-insensitive) in SQL with owner.table
-                                orig_sql = sql
-                                for m in missing:
-                                    # extract only table token portion
-                                    target_tbl = m.split('.')[-1]
-                                    sql = sql.replace(target_tbl, f"{owner_name}.{table_name}")
-                                assumptions.append(f"Rewrote table references {', '.join(missing)} to {owner_name}.{table_name} based on DDL context")
-                                rewritten = True
-                                is_safe = True
-                                # update technical view SQL to rewritten SQL
-                                # (caller uses returned dict's sql field)
-                    except Exception:
-                        pass
-
-                if not rewritten:
-                    assumptions.append(f"Referenced table(s) not found: {', '.join(missing)}")
-                    is_safe = False
+        is_safe = True
+        try:
+            sql = self.sql_guard.validate_and_normalise(sql)
+        except Exception:
+            is_safe = False
 
         return {"sql": sql, "assumptions": assumptions, "is_safe": is_safe}
 
@@ -139,6 +94,7 @@ class OrchestrationService:
             return [raw_result]
 
         return [{"value": raw_result}]
+
     def chart_recommendation(self, rows: List[Dict[str, Any]]) -> Dict[str, str]:
         """Return `chart.payload` with keys: chart_type, x, y."""
         x = ""
@@ -180,34 +136,13 @@ class OrchestrationService:
         if rows is not None:
             count = len(rows)
             if count == 0:
-                return "No rows returned"
+                return "لا توجد بيانات"
             if count == 1:
-                return "Returned 1 row"
-            return f"Returned {count} rows"
+                return "تم إرجاع صف واحد."
+            return f"تم إرجاع {count} صفوف."
 
         # Fallback
-        return "ok"
-
-    def _is_safe_sql(self, sql: str) -> bool:
-        """Minimal SELECT-only guard used for current contract's `is_safe`."""
-        sql_upper = (sql or "").strip().upper()
-        # Remove trailing semicolons produced by LLMs
-        sql_upper = sql_upper.rstrip("; ")
-        if not sql_upper.startswith("SELECT"):
-            return False
-        # Disallow semicolons inside the SQL (i.e., multiple statements)
-        if ";" in sql_upper:
-            return False
-
-        disallowed = ("INSERT", "UPDATE", "DELETE", "DROP", "TRUNCATE", "ALTER")
-        if any(keyword in sql_upper for keyword in disallowed):
-            return False
-
-        # Extra check: avoid common malformed LLM outputs (e.g., stray backticks)
-        if "```" in sql_upper:
-            return False
-
-        return True
+        return "تمت المعالجة بنجاح"
 
     def _referenced_tables(self, sql: str) -> List[tuple]:
         """Return list of (owner, table) tuples referenced in FROM/JOIN clauses.

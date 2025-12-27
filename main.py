@@ -18,7 +18,7 @@ from datetime import datetime
 
 from app.core.config import settings
 from app.core.exceptions import AppException
-from app.api.v1 import query, admin, health, auth
+from app.api.v1 import query, admin, health, auth, chat, training, assets, feedback
 
 
 tags_metadata = [{"name": "health", "description": "Health endpoints"}]
@@ -73,6 +73,10 @@ def create_app() -> FastAPI:
     app.include_router(query.router, prefix="/api/v1")
     app.include_router(auth.router, prefix="/api/v1/auth")
     app.include_router(admin.router, prefix="/api/v1/admin")
+    app.include_router(chat.router, prefix="/api/v1")
+    app.include_router(training.router, prefix="/api/v1")
+    app.include_router(assets.router, prefix="/api/v1")
+    app.include_router(feedback.router, prefix="/api/v1")
     # Health router already has prefix="/health"; include at /api/v1
     app.include_router(health.router, prefix="/api/v1")
 

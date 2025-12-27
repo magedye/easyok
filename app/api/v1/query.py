@@ -3,12 +3,16 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from app.api.dependencies import optional_auth, UserContext
+from app.api.dependencies import optional_auth, UserContext, require_permission
+from app.core.config import get_settings
 from app.models.request import QueryRequest
 from app.services.orchestration_service import OrchestrationService
+from app.services.audit_service import AuditService
 
 router = APIRouter(tags=["query"])
 orchestration_service = OrchestrationService()
+settings = get_settings()
+audit_service = AuditService()
 
 
 @router.post("/ask")
@@ -16,7 +20,7 @@ async def ask(
     request: QueryRequest | None = None,
     question: str | None = Query(default=None),
     top_k: int | None = Query(default=None),
-    user: UserContext = Depends(optional_auth),
+    user: UserContext = Depends(require_permission("query:execute")),
 ):
     """
     Ask a natural language question.
@@ -31,6 +35,9 @@ async def ask(
     Returns:
         Query result with optional RLS filtering
     """
+    if settings.STREAM_PROTOCOL != "ndjson":
+        raise HTTPException(status_code=404, detail="NDJSON stream disabled")
+
     async def ndjson_stream():
         """Stream NDJSON chunks in strict order: technical_view -> data -> chart -> summary."""
 
@@ -45,6 +52,17 @@ async def ask(
         tk = tk if tk is not None else 5
 
         try:
+            audit_service.log(
+                user_id=user.get("user_id", "anonymous"),
+                role=user.get("role", "guest"),
+                action="ask",
+                resource_id=None,
+                payload={"question": q_text},
+                question=q_text,
+                sql="",
+                status="started",
+                outcome="success",
+            )
             technical_view = await orchestration_service.prepare(
                 question=q_text,
                 top_k=tk,

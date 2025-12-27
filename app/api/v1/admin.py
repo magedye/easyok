@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from app.api.dependencies import require_permission, UserContext
+from app.services.audit_service import AuditService
 
 router = APIRouter(tags=["admin"]) 
+audit_service = AuditService()
 
 
 @router.post("/training/approve")
@@ -23,6 +25,14 @@ async def approve_training(
     Returns:
         Success confirmation
     """
+    audit_service.log(
+        user_id=user.get("user_id", "anonymous"),
+        role=user.get("role", "guest"),
+        action="training_approve",
+        resource_id=training_id,
+        status="success",
+        outcome="success",
+    )
     return {
         "status": "approved",
         "training_id": training_id,

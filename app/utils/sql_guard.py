@@ -39,15 +39,16 @@ class SQLGuard:
 
     def _apply_limit(self, sql: str, limit: int = 100) -> str:
         sql_upper = sql.upper()
+        limit_val = self.settings.DEFAULT_ROW_LIMIT if hasattr(self.settings, "DEFAULT_ROW_LIMIT") else limit
         if self.settings.DB_TYPE.lower() == "oracle":
             if "FETCH FIRST" not in sql_upper and "ROWNUM" not in sql_upper:
-                return f"{sql.rstrip()} FETCH FIRST {limit} ROWS ONLY"
+                return f"{sql.rstrip()} FETCH FIRST {limit_val} ROWS ONLY"
         elif self.settings.DB_TYPE.lower() == "mssql":
             # MSSQL uses TOP; check if TOP already exists after SELECT
             if re.match(r"SELECT\s+TOP", sql_upper) is None:
                 # Insert TOP after SELECT
-                return sql.replace("SELECT", f"SELECT TOP {limit}", 1)
+                return sql.replace("SELECT", f"SELECT TOP {limit_val}", 1)
         elif self.settings.DB_TYPE.lower() == "postgres":
             if "LIMIT" not in sql_upper:
-                return f"{sql.rstrip()} LIMIT {limit}"
+                return f"{sql.rstrip()} LIMIT {limit_val}"
         return sql

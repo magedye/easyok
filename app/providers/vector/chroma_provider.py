@@ -8,6 +8,8 @@ embeddings.  It assumes the client is installed via the
 
 from typing import Iterable, Tuple, Dict, List
 from dataclasses import dataclass
+from pathlib import Path
+import uuid
 import chromadb  # type: ignore
 
 from app.core.config import Settings
@@ -21,7 +23,9 @@ class ChromaProvider(BaseVectorStore):
 
     def __post_init__(self) -> None:
         try:
-            self.client = chromadb.PersistentClient(path=str(self.settings.VECTOR_STORE_PATH))
+            path = Path(self.settings.VECTOR_STORE_PATH)
+            path.mkdir(parents=True, exist_ok=True)
+            self.client = chromadb.PersistentClient(path=str(path))
             # Using a single default collection
             self.collection = self.client.get_or_create_collection("training_data")
         except Exception as exc:
@@ -29,9 +33,9 @@ class ChromaProvider(BaseVectorStore):
 
     def add_documents(self, documents: Iterable[str], metadatas: Iterable[Dict[str, any]]) -> None:
         try:
-            ids = [str(i) for i, _ in enumerate(documents)]
             docs = list(documents)
             metas = list(metadatas)
+            ids = [str(uuid.uuid4()) for _ in docs]
             self.collection.add(ids=ids, documents=docs, metadatas=metas)
         except Exception as exc:
             raise AppException(str(exc))
