@@ -10,6 +10,7 @@ instantiation from the rest of the codebase.
 from app.core.config import Settings
 from app.providers.base import BaseLLMProvider
 
+
 def create_llm_provider(settings: Settings) -> BaseLLMProvider:
     provider = settings.LLM_PROVIDER.lower()
 
@@ -34,3 +35,49 @@ def create_llm_provider(settings: Settings) -> BaseLLMProvider:
         return GroqProvider(settings)
 
     raise ValueError(f"Unsupported LLM provider: {provider}")
+
+
+def create_db_provider(settings: Settings):
+    """Return a concrete database provider based on settings.DB_PROVIDER."""
+    provider = settings.DB_PROVIDER.lower()
+
+    if provider == "oracle":
+        from app.providers.database.oracle_provider import OracleProvider
+
+        return OracleProvider(settings)
+
+    if provider == "mssql":
+        from app.providers.database.mssql_provider import MSSQLProvider
+
+        return MSSQLProvider(settings)
+
+    raise ValueError(f"Unsupported DB provider: {provider}")
+
+
+def create_vector_provider(settings: Settings):
+    """Return a concrete vector store provider based on settings.VECTOR_DB."""
+    provider = settings.VECTOR_DB.lower()
+
+    if provider == "chromadb":
+        from app.providers.vector.chroma_provider import ChromaProvider
+
+        return ChromaProvider(settings)
+
+    if provider == "qdrant":
+        from app.providers.vector.qdrant_provider import QdrantProvider
+
+        return QdrantProvider(settings)
+
+    raise ValueError(f"Unsupported vector provider: {provider}")
+
+
+def create_vector_provider(settings: Settings):
+    """Return a concrete vector provider based on settings.VECTOR_DB."""
+    provider = settings.VECTOR_DB.lower()
+
+    if provider == "chromadb":
+        from app.providers.vector.chroma_provider import ChromaProvider
+
+        return ChromaProvider(settings)
+
+    raise ValueError(f"Unsupported VECTOR DB provider: {provider}")

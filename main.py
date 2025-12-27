@@ -18,7 +18,10 @@ from datetime import datetime
 
 from app.core.config import settings
 from app.core.exceptions import AppException
-from app.api.v1 import query, admin, health
+from app.api.v1 import query, admin, health, auth
+
+
+tags_metadata = [{"name": "health", "description": "Health endpoints"}]
 
 
 def create_app() -> FastAPI:
@@ -26,7 +29,8 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="EasyData AI Analyst Backend",
         version="0.1.0",
-        description="Self‑hosted backend for natural language to SQL queries using Vanna."
+        description="Self‑hosted backend for natural language to SQL queries using Vanna.",
+        openapi_tags=tags_metadata,
     )
 
     # Global exception handler
@@ -67,7 +71,9 @@ def create_app() -> FastAPI:
 
     # Add routers
     app.include_router(query.router, prefix="/api/v1")
-    app.include_router(admin.router, prefix="/api/v1")
+    app.include_router(auth.router, prefix="/api/v1/auth")
+    app.include_router(admin.router, prefix="/api/v1/admin")
+    # Health router already has prefix="/health"; include at /api/v1
     app.include_router(health.router, prefix="/api/v1")
 
     return app

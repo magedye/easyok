@@ -12,6 +12,8 @@ Prerequisites
 Preview (Dry Run)
 -----------------
 ```bash
+# Activate virtualenv
+source .venv/bin/activate
 VANNA_ALLOW_DDL=true python scripts/oracle/extract_and_ingest_ddl.py --owner HR --dry-run
 ```
 
@@ -20,9 +22,16 @@ Ingest (Safe Mode)
 The script respects the `VANNA_ALLOW_DDL` env (default false). To allow ingestion:
 
 ```bash
+# Activate virtualenv
+source .venv/bin/activate
 VANNA_ALLOW_DDL=true python scripts/oracle/extract_and_ingest_ddl.py --owner HR
 ```
 
+# CI / container note
+If you run in CI or a container without a virtualenv, bypass the check explicitly:
+```bash
+python scripts/oracle/extract_and_ingest_ddl.py --owner HR --skip-venv-check
+```
 Force (Bypass guard) — use with care
 -----------------------------------
 ```bash

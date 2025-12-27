@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.api.dependencies import optional_auth, UserContext
@@ -13,7 +13,9 @@ orchestration_service = OrchestrationService()
 
 @router.post("/ask")
 async def ask(
-    request: QueryRequest,
+    request: QueryRequest | None = None,
+    question: str | None = Query(default=None),
+    top_k: int | None = Query(default=None),
     user: UserContext = Depends(optional_auth),
 ):
     """
@@ -34,10 +36,18 @@ async def ask(
 
         # NOTE: Runtime contract is authoritative in AskResponse_NDJSON_Schema.md:
         # {"type": "...", "payload": ...}
+        # Accept either JSON body (QueryRequest) or query params (question/top_k)
+        q_text = request.question if request else question
+        tk = request.top_k if request and request.top_k is not None else top_k
+        if q_text is None:
+            raise HTTPException(status_code=422, detail="question is required")
+
+        tk = tk if tk is not None else 5
+
         try:
             technical_view = await orchestration_service.prepare(
-                question=request.question,
-                top_k=request.top_k,
+                question=q_text,
+                top_k=tk,
                 user_context=user,
             )
 

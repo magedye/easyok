@@ -26,18 +26,63 @@ class OracleProvider(BaseDatabaseProvider):
         pass
 
     def connect(self) -> oracledb.Connection:
-        """Return a new Oracle database connection."""
-        # Use service name (DB_NAME) if provided; fallback to SID
-        dsn = oracledb.makedsn(
-            self.settings.DB_HOST,
-            self.settings.DB_PORT,
-            service_name=self.settings.DB_NAME,
-        )
-        return oracledb.connect(
-            user=self.settings.DB_USER,
-            password=self.settings.DB_PASSWORD,
-            dsn=dsn,
-            mode=oracledb.DEFAULT_AUTH
+        """Return a new Oracle database connection.
+
+        Supports two modes:
+        - A direct ORACLE_CONNECTION_STRING in settings (preferred in typical deployments)
+        - Individual DB_* env style variables when available
+        """
+        # 1) Try direct connection string from settings
+        conn_str = getattr(self.settings, "ORACLE_CONNECTION_STRING", None)
+        if conn_str:
+            # Try direct connect; if it fails, fall back to parsing same as the DDL extractor
+            try:
+                return oracledb.connect(conn_str)
+            except Exception:
+                # Fall through to parsing approach
+                pass
+
+            # Attempt to parse common connect-string patterns
+            try:
+                import re
+
+                conn_str_clean = str(conn_str).split()[0]
+                pattern = re.compile(
+                    r"(?:(?:[a-zA-Z0-9_+\-]+)://)?"  # optional scheme
+                    r"(?P<user>[^:]+):(?P<pw>[^@]+)@"
+                    r"(?P<host>[^:/]+):(?P<port>\d+)[/\\](?P<service>\S+)"
+                )
+                m = pattern.search(conn_str_clean)
+                if not m:
+                    raise RuntimeError(f"Unrecognized ORACLE_CONNECTION_STRING format: '{conn_str_clean}'")
+
+                user = m.group("user")
+                password = m.group("pw")
+                host = m.group("host")
+                port = int(m.group("port"))
+                service = m.group("service")
+
+                dsn = oracledb.makedsn(host, port, service_name=service)
+                return oracledb.connect(user=user, password=password, dsn=dsn)
+            except Exception as exc:  # pragma: no cover - defensive
+                raise RuntimeError(f"Failed to connect using ORACLE_CONNECTION_STRING: {exc}")
+
+        # 2) Fallback to explicit DB_* fields on settings when present
+        try:
+            host = getattr(self.settings, "DB_HOST", None)
+            port = getattr(self.settings, "DB_PORT", None)
+            dbname = getattr(self.settings, "DB_NAME", None)
+            user = getattr(self.settings, "DB_USER", None)
+            password = getattr(self.settings, "DB_PASSWORD", None)
+
+            if host and port and dbname and user and password:
+                dsn = oracledb.makedsn(host, int(port), service_name=dbname)
+                return oracledb.connect(user=user, password=password, dsn=dsn, mode=oracledb.DEFAULT_AUTH)
+        except Exception:
+            pass
+
+        raise RuntimeError(
+            "Missing Oracle connection details; set ORACLE_CONNECTION_STRING or DB_* env vars"
         )
 
     def execute(self, sql: str, parameters: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:

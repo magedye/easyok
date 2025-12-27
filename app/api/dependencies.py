@@ -80,7 +80,7 @@ async def optional_auth(request: Request) -> UserContext:
     Raises:
         HTTPException: 401 if AUTH_ENABLED and token invalid
     """
-    settings = get_settings()
+    settings = get_settings(force_reload=True)
     
     # 🔓 Security Disabled → Return Anonymous Context
     if not settings.AUTH_ENABLED:
@@ -149,7 +149,7 @@ def require_permission(permission: str):
         HTTPException: 403 if permission missing (when RBAC_ENABLED)
     """
     async def checker(user: UserContext = Depends(optional_auth)) -> UserContext:
-        settings = get_settings()
+        settings = get_settings(force_reload=True)
         
         # 🔓 RBAC Disabled → Allow Everything
         if not settings.RBAC_ENABLED:
@@ -188,7 +188,7 @@ def require_role(role: str):
         HTTPException: 403 if role missing (when RBAC_ENABLED)
     """
     async def checker(user: UserContext = Depends(optional_auth)) -> UserContext:
-        settings = get_settings()
+        settings = get_settings(force_reload=True)
         
         # 🔓 RBAC Disabled → Allow Everything
         if not settings.RBAC_ENABLED:

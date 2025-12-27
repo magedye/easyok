@@ -28,19 +28,14 @@ def _has_oracle_driver() -> bool:
 
 
 def _get_connection_args():
-    """Return dict with connection args or None if not available."""
-    # Preferred: explicit DB_* env vars (compatible with provider implementations)
-    conn = {}
-    # Try settings attributes (used by some providers)
-    for k in ("DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT", "DB_NAME"):
-        if hasattr(settings, k):
-            conn[k.lower()] = getattr(settings, k)
+    """Return dict with connection args or None if not available.
 
-    # If ORACLE_CONNECTION_STRING is provided in settings, return it directly
-    if getattr(settings, "ORACLE_CONNECTION_STRING", None):
-        return {"connection_string": settings.ORACLE_CONNECTION_STRING}
-
-    # Fallback to environment variables (explicit names) if present
+    Order of precedence:
+    1. Explicit DB_* env vars (DB_USER/DB_PASSWORD/DB_HOST/DB_PORT/DB_NAME)
+    2. ORACLE_CONNECTION_STRING in Settings
+    3. DATA_ORACLE_DSN / DATA_ORACLE_USER / DATA_ORACLE_PASSWORD (convenience for local dev)
+    """
+    # 1) Explicit DB_* env vars (preferred)
     env_user = os.environ.get("DB_USER")
     env_pass = os.environ.get("DB_PASSWORD")
     env_host = os.environ.get("DB_HOST")
@@ -55,7 +50,31 @@ def _get_connection_args():
             "service_name": env_name,
         }
 
-    # If none of the above available, return None to indicate no config
+    # 2) ORACLE_CONNECTION_STRING in Settings (may be sanitized by Settings)
+    if getattr(settings, "ORACLE_CONNECTION_STRING", None):
+        return {"connection_string": settings.ORACLE_CONNECTION_STRING}
+
+    # 3) DATA_ORACLE_DSN convenience env var (format: host:port/service)
+    data_dsn = os.environ.get("DATA_ORACLE_DSN")
+    data_user = os.environ.get("DATA_ORACLE_USER")
+    data_pw = os.environ.get("DATA_ORACLE_PASSWORD")
+    if data_dsn and data_user and data_pw:
+        # Parse HOST:PORT/SERVICE
+        try:
+            host_port, service = data_dsn.split("/", 1)
+            host, port = host_port.split(":", 1)
+            return {
+                "user": data_user,
+                "password": data_pw,
+                "host": host,
+                "port": int(port),
+                "service_name": service,
+            }
+        except Exception:
+            # Malformed DSN — fall through to None
+            return None
+
+    # Nothing found
     return None
 
 

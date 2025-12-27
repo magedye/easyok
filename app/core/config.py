@@ -196,10 +196,50 @@ class Settings(BaseSettings):
     def validate_oracle_conn(
         cls, v: Optional[str], info: ValidationInfo
     ) -> Optional[str]:
+        """Validate and sanitize ORACLE_CONNECTION_STRING.
+
+        - When DB_PROVIDER is 'oracle', the value must be present.
+        - Trim surrounding whitespace and strip any trailing comments or markers
+          (e.g., '>>> CHANGE ME <<<') by taking the first token before whitespace.
+        """
         if info.data.get("DB_PROVIDER") == "oracle" and not v:
             raise ValueError(
                 "ORACLE_CONNECTION_STRING is mandatory when DB_PROVIDER is 'oracle'"
             )
+
+        if v:
+            # Remove surrounding whitespace and trim anything after the first whitespace
+            v_clean = str(v).strip().split()[0]
+            # Remove surrounding quotes if present
+            if (v_clean.startswith('"') and v_clean.endswith('"')) or (
+                v_clean.startswith("'") and v_clean.endswith("'")
+            ):
+                v_clean = v_clean[1:-1]
+
+            # Normalize common URL-style connection strings to a format accepted by oracledb.connect
+            # e.g. oracle+oracledb://user:pw@host:port/service --> user/pw@host:port/service
+            try:
+                import re
+
+                pattern = re.compile(
+                    r"(?:(?:[a-zA-Z0-9_+\-]+)://)?"  # optional scheme
+                    r"(?P<user>[^:]+):(?P<pw>[^@]+)@"
+                    r"(?P<host>[^:/]+):(?P<port>\d+)[/\\](?P<service>\S+)"
+                )
+                m = pattern.search(v_clean)
+                if m:
+                    user = m.group("user")
+                    pw = m.group("pw")
+                    host = m.group("host")
+                    port = m.group("port")
+                    service = m.group("service")
+                    return f"{user}/{pw}@{host}:{port}/{service}"
+            except Exception:
+                # If parsing fails, fall back to the cleaned token
+                pass
+
+            return v_clean
+
         return v
 
     @field_validator("MSSQL_CONNECTION_STRING")
@@ -214,14 +254,19 @@ class Settings(BaseSettings):
         return v
 
 
-@lru_cache()
-def get_settings() -> Settings:
-    """
-    Cached access to application settings.
-    This is the ONLY supported way to access configuration.
-    """
-    return Settings()
+_settings_cache: Optional[Settings] = None
 
 
-# Global settings instance (explicit, intentional)
+def get_settings(force_reload: bool = False) -> Settings:
+    """
+    Access application settings. Set force_reload=True to re-read environment
+    variables (useful in tests when monkeypatching os.environ).
+    """
+    global _settings_cache
+    if force_reload or _settings_cache is None:
+        _settings_cache = Settings()
+    return _settings_cache
+
+
+# Global settings instance (legacy alias; prefer get_settings() to allow refresh)
 settings = get_settings()

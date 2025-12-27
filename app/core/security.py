@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
-from app.core.config import settings
+from app.core.config import get_settings
 
 
 def create_access_token(
@@ -25,6 +25,8 @@ def create_access_token(
         Encoded JWT token
     """
     
+    settings = get_settings(force_reload=True)
+
     if expires_delta is None:
         expires_delta = timedelta(minutes=settings.JWT_EXPIRATION_MINUTES)
     
@@ -61,6 +63,8 @@ def decode_access_token(token: str) -> Dict[str, Any]:
         JWTError: If token is invalid or expired
     """
     
+    settings = get_settings(force_reload=True)
+
     try:
         payload = jwt.decode(
             token,

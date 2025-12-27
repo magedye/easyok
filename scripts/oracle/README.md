@@ -7,14 +7,21 @@ Small utility to extract schema DDL from an Oracle database and ingest it into a
 
 Quick Usage
 -----------
-- Preview (dry-run):
+- Activate venv and Preview (dry-run):
   ```bash
+  source .venv/bin/activate
   VANNA_ALLOW_DDL=true python scripts/oracle/extract_and_ingest_ddl.py --owner HR --dry-run
   ```
 
-- Ingest into Chromadb:
+- Activate venv and ingest into Chromadb:
   ```bash
+  source .venv/bin/activate
   VANNA_ALLOW_DDL=true python scripts/oracle/extract_and_ingest_ddl.py --owner HR
+  ```
+
+- In CI or containers where a venv is not used, bypass the venv check explicitly:
+  ```bash
+  python scripts/oracle/extract_and_ingest_ddl.py --owner HR --skip-venv-check
   ```
 
 Security and Governance
