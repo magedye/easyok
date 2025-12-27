@@ -110,7 +110,11 @@ class VannaService:
 
                 if ctx_parts:
                     schema_ctx = "\n\n-- SCHEMA CONTEXT (from vector store):\n" + "\n\n".join(ctx_parts)
-                    prompt = f"{schema_ctx}\n\nQuestion: {question}\n\nOnly use tables present in the schema context above. Provide a single Oracle-compatible SELECT statement."
+                    prompt = (
+                        f"{schema_ctx}\n\nQuestion: {question}\n\n"
+                        "Respond with a single Oracle-compatible SELECT statement only. "
+                        "Do not include semicolons, markdown fences, DESCRIBE/SHOW, or any DML/DDL."
+                    )
             except Exception as exc:
                 logger.warning("Vector store query failed: %s", exc)
 
@@ -121,18 +125,7 @@ class VannaService:
             import asyncio
 
             sql = await asyncio.wait_for(self.llm.generate_sql(prompt), timeout=5)
-
-            # Extract code fence if present
-            if isinstance(sql, str) and "```" in sql:
-                try:
-                    import re
-                    m = re.search(r"```(?:sql)?\s*(.*?)\s*```", sql, re.S | re.I)
-                    if m:
-                        sql = m.group(1)
-                except Exception:
-                    pass
-
-            sql_clean = (sql or "").strip()
+            sql_clean = self._sanitize_sql(sql)
             if not sql_clean:
                 logger.warning("LLM returned empty SQL; using fallback")
                 return fallback_sql
@@ -142,6 +135,25 @@ class VannaService:
         except Exception as exc:  # pragma: no cover - provider failures
             logger.warning("LLM SQL generation failed (%s); using fallback", exc)
             return fallback_sql
+
+    def _sanitize_sql(self, sql: Any) -> str:
+        """Strip markdown fences, leading SQL: prefixes, and trailing semicolons."""
+        if not isinstance(sql, str):
+            return ""
+        sql_clean = sql.strip()
+        if "```" in sql_clean:
+            try:
+                import re
+                m = re.search(r"```(?:sql)?\s*(.*?)\s*```", sql_clean, re.S | re.I)
+                if m:
+                    sql_clean = m.group(1)
+            except Exception:
+                pass
+        if sql_clean.lower().startswith("sql:"):
+            sql_clean = sql_clean.split(":", 1)[1].strip()
+        sql_clean = sql_clean.replace("\r", " ").replace("\n", " ")
+        sql_clean = sql_clean.strip().strip(";").strip()
+        return sql_clean
     
     def inject_rls_filters(self, sql: str, data_scope: dict) -> str:
         """
