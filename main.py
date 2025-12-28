@@ -35,6 +35,10 @@ from app.api.v1 import (
     rag_quality,
 )
 from app.api.v1.admin import settings as admin_settings
+from app.api.v1.admin import observability as admin_observability
+from app.api.v1.admin import training as admin_training
+from app.api.v1.admin import sandbox as admin_sandbox
+from app.api.v1 import behavioral_feedback
 from app.services.observability_service import ObservabilityService
 from app.telemetry import setup_tracing
 from app.services.alerting_guard import initialize_alerting
@@ -97,12 +101,16 @@ def create_app() -> FastAPI:
     app.include_router(training.router, prefix="/api/v1")
     app.include_router(assets.router, prefix="/api/v1")
     app.include_router(feedback.router, prefix="/api/v1")
+    app.include_router(behavioral_feedback.router, prefix="/api/v1")
     app.include_router(schema.router, prefix="/api/v1")
     app.include_router(api_catalog.router, prefix="/api/v1")
     app.include_router(observability.router, prefix="/api/v1")
     app.include_router(analytics.router, prefix="/api/v1")
     app.include_router(rag_quality.router, prefix="/api/v1")
     app.include_router(admin_settings.router, prefix="/api/v1")
+    app.include_router(admin_observability.router, prefix="/api/v1")
+    app.include_router(admin_training.router, prefix="/api/v1")
+    app.include_router(admin_sandbox.router, prefix="/api/v1")
     # Health router already has prefix="/health"; include at /api/v1
     app.include_router(health.router, prefix="/api/v1")
 

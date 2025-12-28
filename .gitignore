@@ -1,10 +1,92 @@
-venv/
+# =================================================================
+# 🐍 Python & Backend (Governance Core – Track A & B)
+# =================================================================
 __pycache__/
-*.pyc
-.env
-data/chroma_db/
-*.log
-venv
-.venv
-venv/
+*.py[cod]
+*$py.class
 .venv/
+venv/
+env/
+
+# Build artifacts for custom lint library (flake8-easydata-arch) [Track A]
+build/
+dist/
+*.egg-info/
+.installed.cfg
+
+# Verification & testing tools
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+
+# =================================================================
+# 📦 Node.js & Frontend (Causal Cockpit)
+# =================================================================
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vite build outputs [Track B]
+frontend/dist/
+frontend/out/
+.vite/
+
+# =================================================================
+# 🤖 Generated Code (Contracts & SDKs – Drift Prevention)
+# =================================================================
+# Auto-generated code must NOT be committed.
+# Enforces strict reliance on the authoritative contract only.
+frontend/src/api/generated/
+frontend/src/client/
+frontend/openapi.json
+backend/app/openapi.json
+
+# =================================================================
+# 🗄️ Storage & Databases (Non-Persistent – Track D)
+# =================================================================
+# Exclude vector database (ChromaDB) to preserve data privacy
+data/chroma_db/
+
+# Exclude temporary discovery buffer data
+data/discovery_buffer/
+
+*.db
+*.sqlite3
+*.sqlite
+
+# =================================================================
+# 🔐 Security & Environment (Hard Constraints)
+# =================================================================
+# Prevent leakage of governance keys and mandatory credentials
+.env
+.env.local
+.env.*.local
+.python-version
+*.pem
+*.key
+*.crt
+
+# =================================================================
+# 👁️ Logs & Observability (Anti-Deception – Track C)
+# =================================================================
+*.log
+logs/
+
+# Local SigNoz and OpenTelemetry artifacts must not pollute the repo
+.sentry-debug-log
+.otel-cache/
+
+# =================================================================
+# 💻 IDE & System Files
+# =================================================================
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

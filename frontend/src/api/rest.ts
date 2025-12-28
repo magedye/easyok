@@ -1,3 +1,6 @@
+// DEPRECATED: do not use. This manual fetch layer is retained only for legacy imports.
+// All new code must use the generated client in src/api/generated/client.ts with zod validation.
+
 function getApiBaseUrl(): string {
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
   if (!baseUrl) {

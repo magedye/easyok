@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flake8-easydata-arch"
+version = "1.0.0"
+description = "Flake8 plugin enforcing EasyData architectural isolation (ADR-0018)"
+requires-python = ">=3.9"
+dependencies = ["flake8>=6.0"]
+
+[project.entry-points."flake8.extension"]
+EDA9 = "flake8_easydata_arch.checker:EasyDataArchChecker"

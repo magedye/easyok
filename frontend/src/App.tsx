@@ -5,6 +5,10 @@ import Login from './components/Login';
 import NavBar from './components/NavBar';
 import OperationalConsole from './components/OperationalConsole';
 import UnifiedDashboard from './pages/Admin/UnifiedDashboard';
+import TrainingQueuePage from './admin/training/TrainingQueuePage';
+import TrainingMetricsPanel from './admin/training/TrainingMetricsPanel';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import AdminLayout from './layouts/AdminLayout';
 
 import { AUTH_ENABLED, TOKEN_STORAGE_KEY } from './config';
 
@@ -12,42 +16,65 @@ import { AUTH_ENABLED, TOKEN_STORAGE_KEY } from './config';
 export default function App() {
   const token = localStorage.getItem(TOKEN_STORAGE_KEY);
   const isAuthed = !AUTH_ENABLED || Boolean(token);
+  const role: 'admin' | 'viewer' = 'admin'; // role should be resolved from server in real flow
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <NavBar />
-      <div className="container mx-auto p-4">
-        <Routes>
-          <Route
-            path="/login"
-            element={
-              AUTH_ENABLED ? (
-                token ? (
-                  <Navigate to="/" replace />
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-50 text-gray-900">
+        <NavBar />
+        <div className="container mx-auto p-4">
+          <Routes>
+            <Route
+              path="/login"
+              element={
+                AUTH_ENABLED ? (
+                  token ? (
+                    <Navigate to="/" replace />
+                  ) : (
+                    <Login />
+                  )
                 ) : (
-                  <Login />
+                  <Navigate to="/" replace />
                 )
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/training"
-            element={isAuthed ? <TrainingUpload /> : <Navigate to="/login" replace />}
-          />
-          <Route
-            path="/console"
-            element={isAuthed ? <OperationalConsole /> : <Navigate to="/login" replace />}
-          />
-          <Route
-            path="/admin"
-            element={isAuthed ? <UnifiedDashboard /> : <Navigate to="/login" replace />}
-          />
-          <Route path="/" element={isAuthed ? <Chat /> : <Navigate to="/login" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+              }
+            />
+            <Route
+              path="/training"
+              element={isAuthed ? <TrainingUpload /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/console"
+              element={isAuthed ? <OperationalConsole /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/admin/dashboard"
+              element={isAuthed ? <UnifiedDashboard role={role} /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/admin"
+              element={isAuthed ? <UnifiedDashboard role={role} /> : <Navigate to="/login" replace />}
+            />
+            <Route path="/" element={isAuthed ? <Chat /> : <Navigate to="/login" replace />} />
+            <Route
+              path="/admin/training/queue"
+              element={isAuthed ? <TrainingQueuePage role={role} /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/admin/training/metrics"
+              element={
+                isAuthed ? (
+                  <AdminLayout role={role}>
+                    <TrainingMetricsPanel role={role} />
+                  </AdminLayout>
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }
