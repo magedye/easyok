@@ -4,6 +4,7 @@ import TrainingUpload from './components/TrainingUpload';
 import Login from './components/Login';
 import NavBar from './components/NavBar';
 import OperationalConsole from './components/OperationalConsole';
+import UnifiedDashboard from './pages/Admin/UnifiedDashboard';
 
 import { AUTH_ENABLED, TOKEN_STORAGE_KEY } from './config';
 
@@ -38,6 +39,10 @@ export default function App() {
           <Route
             path="/console"
             element={isAuthed ? <OperationalConsole /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="/admin"
+            element={isAuthed ? <UnifiedDashboard /> : <Navigate to="/login" replace />}
           />
           <Route path="/" element={isAuthed ? <Chat /> : <Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

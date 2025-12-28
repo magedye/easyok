@@ -10,12 +10,14 @@ from app.services.vanna_service import VannaService
 from app.utils.sql_guard import SQLGuard
 from app.services.audit_service import AuditService
 from app.core.exceptions import InvalidQueryError
+from app.services.schema_policy_service import SchemaPolicyService
 
 router = APIRouter(tags=["chat"])
 settings = get_settings()
 vanna = VannaService()
 sql_guard = SQLGuard(settings)
 audit_service = AuditService()
+policy_service = SchemaPolicyService()
 
 
 def _mask_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -148,10 +150,15 @@ async def chat_stream(
             assumptions.append("تم توليد الاستعلام بناءً على المخطط المدرّب الحالي فقط.")
 
         is_safe = True
+        error_msg = ""
         try:
-            sql = sql_guard.validate_and_normalise(sql)
-        except Exception:
+            policy = policy_service.get_active()
+            if not policy:
+                raise InvalidQueryError("SECURITY_VIOLATION: no active schema policy")
+            sql = sql_guard.validate_and_normalise(sql, policy=policy)
+        except Exception as exc:
             is_safe = False
+            error_msg = str(exc)
 
         technical_view = {
             "sql": sql,
@@ -163,7 +170,10 @@ async def chat_stream(
         yield f"event: technical_view\ndata: {json.dumps(technical_view)}\n\n"
 
         if not is_safe or not assumptions:
-            error_payload = {"code": "invalid_query", "message": "SQL rejected or assumptions missing"}
+            error_payload = {
+                "code": "invalid_query",
+                "message": error_msg or "SQL rejected or assumptions missing",
+            }
             yield f"event: error\ndata: {json.dumps(error_payload)}\n\n"
             audit_service.log(
                 user_id=user.get("user_id", "anonymous"),

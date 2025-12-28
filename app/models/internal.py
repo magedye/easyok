@@ -148,8 +148,28 @@ class SchemaAccessPolicy(Base):
     allowed_tables = Column(JSON, nullable=True)
     allowed_columns = Column(JSON, nullable=True)
     denied_tables = Column(JSON, nullable=True)
+    excluded_tables = Column(JSON, nullable=True)
+    excluded_columns = Column(JSON, nullable=True)
     status = Column(String(32), nullable=False, default="draft")  # draft | active | revoked | rejected_auto
     created_by = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     approved_by = Column(String(255), nullable=True)
     approved_at = Column(DateTime, nullable=True)
+    version = Column(Integer, nullable=False, default=1)
+
+
+class RagasMetric(Base):
+    """Offline RAG quality metrics per execution."""
+
+    __tablename__ = "ragas_metrics"
+
+    id = Column(Integer, primary_key=True)
+    audit_log_id = Column(Integer, ForeignKey("audit_logs.id"), nullable=True)
+    model_name = Column(String(255), nullable=True)
+    schema_version = Column(String(64), nullable=True)
+    policy_version = Column(Integer, nullable=True)
+    context_precision = Column(Float, nullable=True)
+    context_recall = Column(Float, nullable=True)
+    faithfulness = Column(Float, nullable=True)
+    answer_relevance = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)

@@ -118,7 +118,8 @@ class TrainingService:
             question = payload.get("question", "")
             sql = payload.get("sql", "")
             if sql:
-                sql = self.sql_guard.validate_and_normalise(sql)
+                policy = self.policy_service.get_active()
+                sql = self.sql_guard.validate_and_normalise(sql, policy=policy)
             docs.append(f"Q: {question}\nSQL: {sql}")
             metas.append({"type": "sql_pair", "question": question})
         else:
@@ -136,17 +137,26 @@ class TrainingService:
 
         if item_type == "sql":
             sql = (payload.get("sql") or "").upper()
-            # table/column scope check
             tables = policy.allowed_tables or []
+            denied_tables = (policy.denied_tables or []) + (policy.excluded_tables or [])
+            if denied_tables:
+                for dt in denied_tables:
+                    if dt.upper() in sql:
+                        return "Schema-specific SQL training is rejected"
             if tables:
-                for t in tables:
-                    if t.upper() not in sql:
-                        continue
-            # simple heuristic: if dot exists and table not allowed
-            if "." in sql:
-                parts = [p.split(".")[-1] for p in sql.replace("\n", " ").split() if "." in p]
+                for segment in sql.replace("\n", " ").split():
+                    seg = segment.replace(",", "")
+                    if "." in seg:
+                        tbl = seg.split(".")[0]
+                        if tbl and tbl.upper() not in [t.upper() for t in tables]:
+                            return "Schema-specific SQL training is rejected"
+            excluded_columns = policy.excluded_columns or {}
+            if excluded_columns and "." in sql:
+                parts = [p for p in sql.replace("\n", " ").split() if "." in p]
                 for p in parts:
-                    if tables and p not in [t.upper() for t in tables]:
+                    tbl, _, col = p.partition(".")
+                    cols = excluded_columns.get(tbl) or []
+                    if col.upper() in [c.upper() for c in cols]:
                         return "Schema-specific SQL training is rejected"
             if any(tok in sql for tok in ["DROP ", "DELETE ", "INSERT ", "UPDATE "]):
                 return "Unsafe SQL training is rejected"

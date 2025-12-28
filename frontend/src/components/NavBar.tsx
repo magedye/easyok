@@ -36,6 +36,12 @@ export default function NavBar() {
             >
               العمليات
             </Link>
+            <Link
+              to="/admin"
+              className={location.pathname === '/admin' ? 'font-bold' : ''}
+            >
+              المراقبة
+            </Link>
           </>
         )}
       </div>

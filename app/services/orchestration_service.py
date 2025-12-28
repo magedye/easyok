@@ -21,6 +21,10 @@ from app.utils.sql_guard import SQLGuard
 from app.core.exceptions import InvalidQueryError
 from app.services.schema_policy_service import SchemaPolicyService
 from app.services.audit_service import AuditService
+from app.services.semantic_cache_service import SemanticCacheService
+from app.services.arabic_query_engine import ArabicQueryEngine
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
 
 
 class OrchestrationService:
@@ -29,6 +33,9 @@ class OrchestrationService:
         self.sql_guard = SQLGuard(self.vanna_service.settings)
         self.policy_service = SchemaPolicyService()
         self.audit_service = AuditService()
+        self.cache_service = SemanticCacheService(self.sql_guard)
+        self.tracer = trace.get_tracer(__name__)
+        self.arabic_engine = ArabicQueryEngine()
 
     async def prepare(
         self,
@@ -50,22 +57,55 @@ class OrchestrationService:
         if any(tok.strip() in lowered_q for tok in forbidden_tokens):
             raise InvalidQueryError("Blocked due to unsafe intent")
 
-        sql = await self.vanna_service.generate_sql(question)
-        if self.vanna_service.settings.RLS_ENABLED:
-            sql = self.vanna_service.inject_rls_filters(
-                sql,
-                user_context.get("data_scope", {}),
+        original_question = question
+        # Arabic preprocessing (mandatory for Arabic input)
+        if self.arabic_engine._is_arabic(question):
+            processed = self.arabic_engine.process(question)
+            question = processed["final_query"]
+
+        # Enforce active policy
+        policy = self.policy_service.get_active()
+        if not policy:
+            raise InvalidQueryError("SECURITY_VIOLATION: لا توجد سياسة وصول مفعّلة.")
+
+        cache_hit = False
+        similarity = 0.0
+        governance_status = "miss"
+        sql = None
+
+        if self.vanna_service.settings.ENABLE_SEMANTIC_CACHE:
+            hit, cached_sql, similarity, governance_status = self.cache_service.lookup(
+                question=question,
+                policy=policy,
+                llm_provider=self.vanna_service.settings.LLM_PROVIDER,
+                llm_model=getattr(self.vanna_service.settings, "OPENAI_MODEL", ""),
+                rbac_scope=user_context.get("role", "guest"),
             )
+            cache_hit = hit
+            if hit and cached_sql:
+                sql = cached_sql
+
+        if not sql:
+            with self.tracer.start_as_current_span(
+                "sql.generate",
+                attributes={
+                    "llm.provider": getattr(self.vanna_service.settings, "LLM_PROVIDER", ""),
+                    "llm.model": getattr(self.vanna_service.settings, "OPENAI_MODEL", ""),
+                    "llm.temperature": 0.1,
+                },
+            ):
+                sql = await self.vanna_service.generate_sql(question)
+            if self.vanna_service.settings.RLS_ENABLED:
+                sql = self.vanna_service.inject_rls_filters(
+                    sql,
+                    user_context.get("data_scope", {}),
+                )
 
         tables = self._referenced_tables(sql)
         assumptions.extend(self._assumptions_from_metadata(tables))
         if not assumptions:
             assumptions.append("تم بناء الافتراضات استناداً إلى تعريفات DDL (الأعمدة والأنواع والقيود) دون أسماء محددة.")
 
-        # Enforce active policy
-        policy = self.policy_service.get_active()
-        if not policy:
-            raise InvalidQueryError("SECURITY_VIOLATION: لا توجد سياسة وصول مفعّلة.")
         if tables and not self._tables_in_policy(tables, policy):
             self.audit_service.log(
                 user_id=user_context.get("user_id", "anonymous"),
@@ -92,16 +132,50 @@ class OrchestrationService:
             raise InvalidQueryError("SECURITY_VIOLATION: الأعمدة خارج نطاق السياسة المفعّلة.")
 
         is_safe = True
-        try:
-            sql = self.sql_guard.validate_and_normalise(sql)
-        except Exception:
-            is_safe = False
-            sql = ""
+        with self.tracer.start_as_current_span(
+            "sql.validate",
+            attributes={
+                "sql.dialect": "oracle",
+                "schema.version": policy.schema_name,
+                "policy.version": policy.version,
+            },
+        ) as span:
+            try:
+                sql = self.sql_guard.validate_and_normalise(sql, policy=policy)
+                span.set_attribute("sql.allowed", True)
+            except Exception as exc:
+                span.set_attribute("sql.allowed", False)
+                span.set_attribute("sql.violation.reason", str(exc))
+                span.set_status(Status(StatusCode.ERROR, "SQLGuard violation"))
+                is_safe = False
+                sql = ""
 
         if not is_safe or not sql:
             raise InvalidQueryError("Blocked or invalid SQL")
 
-        return {"sql": sql, "assumptions": assumptions, "is_safe": is_safe}
+        if self.vanna_service.settings.ENABLE_SEMANTIC_CACHE and not cache_hit:
+            self.cache_service.store(
+                question=question,
+                validated_sql=sql,
+                policy=policy,
+                llm_provider=self.vanna_service.settings.LLM_PROVIDER,
+                llm_model=getattr(self.vanna_service.settings, "OPENAI_MODEL", ""),
+                rbac_scope=user_context.get("role", "guest"),
+                technical_view={"assumptions": assumptions},
+            )
+
+        return {
+            "sql": sql,
+            "assumptions": assumptions,
+            "is_safe": is_safe,
+            "cache_hit": cache_hit,
+            "similarity_score": similarity,
+            "governance_status": governance_status,
+            "policy_version": policy.version,
+            "schema_version": policy.schema_name,
+            "original_question": original_question,
+            "processed_question": question,
+        }
 
     async def execute_sql(self, sql: str) -> Any:
         """Execute SQL via the underlying query engine and gracefully handle DB errors."""
@@ -249,42 +323,46 @@ class OrchestrationService:
                 temporal = [c for c, t in col_types.items() if "DATE" in t or "TIME" in t]
                 numeric = [c for c, t in col_types.items() if any(k in t for k in ["NUMBER", "DEC", "INT", "FLOAT"])]
 
-        assumptions.append(
-            "تم الاستناد إلى أعمدة DDL المتاحة (أنواع/قيود)؛ أعمدة زمنية محتملة: "
-            f"{', '.join(temporal) if temporal else 'غير محددة'}؛ "
-            f"أعمدة رقمية للتجميع: {', '.join(numeric) if numeric else 'غير محددة'}."
-        )
-    except Exception:
-        assumptions.append("تعذر قراءة تعريفات DDL؛ قد تكون الافتراضات أقل دقة.")
+                assumptions.append(
+                    "تم الاستناد إلى أعمدة DDL المتاحة (أنواع/قيود)؛ أعمدة زمنية محتملة: "
+                    f"{', '.join(temporal) if temporal else 'غير محددة'}؛ "
+                    f"أعمدة رقمية للتجميع: {', '.join(numeric) if numeric else 'غير محددة'}."
+                )
+            except Exception:
+                assumptions.append("تعذر قراءة تعريفات DDL؛ قد تكون الافتراضات أقل دقة.")
 
         assumptions.append("Analysis is strictly restricted to the tables and columns defined in the active Schema Access Policy.")
 
-    return assumptions
+        return assumptions
 
-def _tables_in_policy(self, tables: List[tuple], policy) -> bool:
-    allowed_tables = (policy.allowed_tables or [])
-    denied_tables = (policy.denied_tables or [])
+    def _tables_in_policy(self, tables: List[tuple], policy) -> bool:
+        allowed_tables = policy.allowed_tables or []
+        denied_tables = policy.denied_tables or []
+        excluded_tables = policy.excluded_tables or []
         # If no allowed tables defined, treat as all allowed except explicit denied.
         for _, tbl in tables:
             if denied_tables and tbl in denied_tables:
                 return False
-        if allowed_tables and tbl not in allowed_tables:
-            return False
-    return True
+            if excluded_tables and tbl in excluded_tables:
+                return False
+            if allowed_tables and tbl not in allowed_tables:
+                return False
+        return True
 
     def _columns_in_policy(self, sql: str, tables: List[tuple], policy) -> bool:
         """Check column references against policy.allowed_columns."""
         allowed_columns = policy.allowed_columns or {}
-        if not allowed_columns:
-            return True
+        excluded_columns = policy.excluded_columns or {}
         import re
 
         # Collect explicit table.column references
         tokens = re.findall(r"([A-Z0-9_]+)\.([A-Z0-9_]+)", sql.upper())
         for tbl_owner, col in tokens:
-            # tbl_owner may be table or schema.table split; focus on table token
             tbl = tbl_owner.split(".")[-1]
             allowed_for_table = allowed_columns.get(tbl) or allowed_columns.get(tbl_owner) or []
+            excluded_for_table = excluded_columns.get(tbl) or excluded_columns.get(tbl_owner) or []
+            if excluded_for_table and col in [c.upper() for c in excluded_for_table]:
+                return False
             if allowed_for_table and col not in [c.upper() for c in allowed_for_table]:
                 return False
         return True

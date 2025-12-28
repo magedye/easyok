@@ -15,10 +15,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.requests import Request
 from datetime import datetime
+import time
 
 from app.core.config import settings
 from app.core.exceptions import AppException
-from app.api.v1 import query, admin, health, auth, chat, training, assets, feedback, schema
+from app.api.v1 import (
+    query,
+    admin,
+    health,
+    auth,
+    chat,
+    training,
+    assets,
+    feedback,
+    schema,
+    api_catalog,
+    observability,
+    analytics,
+    rag_quality,
+)
+from app.api.v1.admin import settings as admin_settings
+from app.services.observability_service import ObservabilityService
+from app.telemetry import setup_tracing
+from app.services.alerting_guard import initialize_alerting
 
 
 tags_metadata = [{"name": "health", "description": "Health endpoints"}]
@@ -78,13 +97,28 @@ def create_app() -> FastAPI:
     app.include_router(assets.router, prefix="/api/v1")
     app.include_router(feedback.router, prefix="/api/v1")
     app.include_router(schema.router, prefix="/api/v1")
+    app.include_router(api_catalog.router, prefix="/api/v1")
+    app.include_router(observability.router, prefix="/api/v1")
+    app.include_router(analytics.router, prefix="/api/v1")
+    app.include_router(rag_quality.router, prefix="/api/v1")
+    app.include_router(admin_settings.router, prefix="/api/v1")
     # Health router already has prefix="/health"; include at /api/v1
     app.include_router(health.router, prefix="/api/v1")
+
+    @app.get("/metrics/json", tags=["health"])
+    async def metrics_json():
+        return ObservabilityService.metrics_json()
+
+    # Enforce alert gating early
+    initialize_alerting()
+
+    setup_tracing(app, service_name="easydata-backend")
 
     return app
 
 
 app = create_app()
+settings._START_TIME = getattr(settings, "_START_TIME", time.time())
 
 if __name__ == "__main__":
     import uvicorn

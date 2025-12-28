@@ -1,0 +1,462 @@
+{
+  "appName": "محرك فانـا للرؤى",
+  "slogan": "تحليلات NL → SQL بالأولوية العربية",
+  
+  "auth": {
+    "login": {
+      "title": "تسجيل الدخول",
+      "subtitle": "مرحباً بك في محرك فانـا للرؤى",
+      "email": "عنوان البريد الإلكتروني",
+      "password": "كلمة المرور",
+      "submit": "دخول",
+      "loading": "جارٍ المصادقة...",
+      "error": "فشلت المصادقة. يرجى التحقق من بيانات الدخول.",
+      "rememberMe": "تذكرني",
+      "forgot": "هل نسيت كلمة المرور؟",
+      "noAccount": "ليس لديك حساب؟",
+      "createAccount": "أنشئ واحداً"
+    },
+    "logout": {
+      "title": "تسجيل الخروج",
+      "confirmMessage": "هل أنت متأكد من رغبتك في تسجيل الخروج؟",
+      "confirm": "تسجيل خروج",
+      "cancel": "إلغاء"
+    },
+    "resetPassword": {
+      "title": "إعادة تعيين كلمة المرور",
+      "subtitle": "أدخل بريدك الإلكتروني لتلقي تعليمات إعادة التعيين",
+      "email": "عنوان البريد الإلكتروني",
+      "submit": "إرسال رابط إعادة التعيين",
+      "success": "تحقق من بريدك الإلكتروني للحصول على تعليمات إعادة التعيين",
+      "error": "فشل إرسال بريد إعادة التعيين"
+    },
+    "changePassword": {
+      "title": "تغيير كلمة المرور",
+      "current": "كلمة المرور الحالية",
+      "new": "كلمة المرور الجديدة",
+      "confirm": "تأكيد كلمة المرور",
+      "submit": "تحديث كلمة المرور",
+      "success": "تم تحديث كلمة المرور بنجاح",
+      "error": "فشل تحديث كلمة المرور"
+    }
+  },
+
+  "dashboard": {
+    "title": "لوحة التحكم",
+    "welcome": "مرحباً، {{name}}",
+    "subtitle": "مساعدك الذكي لاستعلامات SQL",
+    "queryInput": {
+      "placeholder": "اطرح سؤالاً باللغة الطبيعية...",
+      "submit": "توليد SQL",
+      "generating": "جارٍ توليد SQL...",
+      "example": "مثال: ما أفضل 5 منتجات لنا من حيث الإيرادات في الربع الماضي؟"
+    },
+    "recentQueries": {
+      "title": "الاستعلامات الأخيرة",
+      "empty": "لا توجد استعلامات أخيرة بعد",
+      "loadMore": "تحميل المزيد"
+    },
+    "stats": {
+      "totalQueries": "إجمالي الاستعلامات",
+      "successRate": "معدل النجاح",
+      "averageTime": "متوسط وقت التنفيذ",
+      "savedQueries": "الاستعلامات المحفوظة"
+    },
+    "quickActions": {
+      "tryExample": "جرّب استعلام مثال",
+      "viewHistory": "عرض السجل الكامل",
+      "browseSchema": "استكشف المخطط",
+      "documentation": "عرض التوثيق"
+    },
+    "suggestions": {
+      "title": "المتابعات المقترحة",
+      "empty": "توليد استعلام لرؤية الاقتراحات"
+    }
+  },
+
+  "query": {
+    "title": "بناء الاستعلام",
+    "editor": {
+      "sql": "استعلام SQL",
+      "explanation": "الشرح",
+      "results": "النتائج",
+      "validate": "التحقق من الاستعلام",
+      "execute": "تنفيذ",
+      "copy": "نسخ SQL",
+      "export": "تصدير النتائج",
+      "explain": "شرح الاستعلام",
+      "clear": "مسح"
+    },
+    "validation": {
+      "valid": "الاستعلام صحيح",
+      "invalid": "فشل التحقق من الاستعلام",
+      "errors": "الأخطاء"
+    },
+    "execution": {
+      "executing": "جارٍ تنفيذ الاستعلام...",
+      "success": "تم تنفيذ الاستعلام بنجاح",
+      "error": "فشل تنفيذ الاستعلام",
+      "rows": "صفوف مرجعة",
+      "time": "ملي ثانية"
+    },
+    "results": {
+      "title": "النتائج",
+      "noResults": "لم يتم إرجاع أي نتائج",
+      "columns": "الأعمدة",
+      "rows": "الصفوف",
+      "downloadCSV": "تحميل CSV",
+      "downloadJSON": "تحميل JSON",
+      "downloadXLSX": "تحميل Excel",
+      "copy": "نسخ النتائج"
+    },
+    "feedback": {
+      "title": "هل كان هذا مفيداً؟",
+      "helpful": "نعم، كان مفيداً",
+      "notHelpful": "لا، لم يكن مفيداً",
+      "comment": "تعليقات إضافية (اختياري)",
+      "submit": "إرسال التعليق",
+      "success": "شكراً لتعليقك",
+      "error": "فشل إرسال التعليق"
+    },
+    "save": {
+      "title": "حفظ الاستعلام",
+      "name": "اسم الاستعلام",
+      "description": "الوصف (اختياري)",
+      "submit": "حفظ",
+      "success": "تم حفظ الاستعلام بنجاح",
+      "error": "فشل حفظ الاستعلام"
+    }
+  },
+
+  "history": {
+    "title": "سجل الاستعلامات",
+    "subtitle": "استعلاماتك السابقة والنتائج",
+    "empty": "لا توجد استعلامات في السجل",
+    "columns": {
+      "date": "التاريخ",
+      "query": "الاستعلام",
+      "status": "الحالة",
+      "duration": "المدة",
+      "rows": "الصفوف"
+    },
+    "filter": {
+      "all": "جميع الاستعلامات",
+      "successful": "الناجحة",
+      "failed": "الفاشلة",
+      "today": "اليوم",
+      "week": "هذا الأسبوع",
+      "month": "هذا الشهر"
+    },
+    "actions": {
+      "view": "عرض",
+      "rerun": "تشغيل جديد",
+      "export": "تصدير",
+      "delete": "حذف",
+      "duplicate": "تكرار"
+    }
+  },
+
+  "schema": {
+    "title": "مخطط قاعدة البيانات",
+    "subtitle": "استكشف الجداول والطرق والأعمدة",
+    "search": "البحث في الجداول...",
+    "tables": "الجداول",
+    "views": "الطرق",
+    "columns": "الأعمدة",
+    "stats": {
+      "rowCount": "الصفوف",
+      "size": "الحجم",
+      "type": "النوع",
+      "nullable": "يقبل القيم الفارغة",
+      "primaryKey": "المفتاح الأساسي",
+      "foreignKey": "المفتاح الأجنبي"
+    },
+    "refresh": "تحديث المخطط",
+    "refreshing": "جارٍ تحديث المخطط...",
+    "lastUpdated": "آخر تحديث {{time}}"
+  },
+
+  "admin": {
+    "title": "لوحة الإدارة",
+    "subtitle": "إدارة وتكوين النظام",
+    "tabs": {
+      "overview": "النظرة العامة",
+      "users": "المستخدمون",
+      "auditLogs": "سجلات التدقيق",
+      "configuration": "التكوين",
+      "health": "حالة النظام"
+    },
+    "overview": {
+      "stats": {
+        "totalUsers": "إجمالي المستخدمين",
+        "activeUsers": "المستخدمون النشطون",
+        "totalQueries": "إجمالي الاستعلامات",
+        "systemHealth": "صحة النظام"
+      }
+    },
+    "users": {
+      "title": "إدارة المستخدمين",
+      "columns": {
+        "name": "الاسم",
+        "email": "البريد الإلكتروني",
+        "role": "الدور",
+        "status": "الحالة",
+        "createdAt": "تاريخ الإنشاء",
+        "lastLogin": "آخر تسجيل دخول"
+      },
+      "roles": {
+        "admin": "مسؤول",
+        "analyst": "محلل",
+        "viewer": "مشاهد"
+      },
+      "status": {
+        "active": "نشط",
+        "inactive": "غير نشط",
+        "disabled": "معطّل"
+      },
+      "actions": {
+        "edit": "تحرير",
+        "changeRole": "تغيير الدور",
+        "disable": "تعطيل",
+        "enable": "تفعيل",
+        "delete": "حذف"
+      },
+      "confirmDisable": "هل أنت متأكد من رغبتك في تعطيل هذا المستخدم؟",
+      "confirmDelete": "هل أنت متأكد من رغبتك في حذف هذا المستخدم؟"
+    },
+    "auditLogs": {
+      "title": "سجلات التدقيق",
+      "columns": {
+        "timestamp": "الوقت والتاريخ",
+        "user": "المستخدم",
+        "action": "الإجراء",
+        "resource": "المورد",
+        "status": "الحالة",
+        "details": "التفاصيل"
+      },
+      "actions": {
+        "export": "تصدير السجلات",
+        "filter": "تصفية"
+      }
+    },
+    "configuration": {
+      "title": "تكوين النظام",
+      "sections": {
+        "general": "الإعدادات العامة",
+        "database": "قاعدة البيانات",
+        "security": "الأمان",
+        "notifications": "الإخطارات"
+      },
+      "save": "حفظ التكوين",
+      "success": "تم حفظ التكوين بنجاح",
+      "error": "فشل حفظ التكوين"
+    },
+    "health": {
+      "title": "صحة النظام",
+      "status": {
+        "healthy": "صحي",
+        "degraded": "متدهور",
+        "critical": "حرج"
+      },
+      "components": {
+        "database": "قاعدة البيانات",
+        "cache": "الذاكرة المؤقتة",
+        "api": "خادم API",
+        "uptime": "وقت التشغيل"
+      }
+    }
+  },
+
+  "observability": {
+    "title": "المراقبة والملاحظة",
+    "subtitle": "مقاييس النظام والمراقبة",
+    "metrics": {
+      "requestsPerSecond": "طلب/ثانية",
+      "averageResponseTime": "متوسط وقت الاستجابة",
+      "errorRate": "معدل الخطأ",
+      "cacheHitRate": "معدل إصابة الذاكرة المؤقتة",
+      "cpuUsage": "استخدام المعالج",
+      "memoryUsage": "استخدام الذاكرة"
+    },
+    "charts": {
+      "requestVolume": "حجم الطلبات",
+      "responseTime": "وقت الاستجابة (ملي ثانية)",
+      "errorRate": "معدل الخطأ (%)",
+      "querySuccess": "معدل نجاح الاستعلام"
+    },
+    "timeRange": {
+      "lastHour": "الساعة الماضية",
+      "last24h": "آخر 24 ساعة",
+      "last7d": "آخر 7 أيام",
+      "last30d": "آخر 30 يوماً"
+    }
+  },
+
+  "settings": {
+    "title": "الإعدادات",
+    "tabs": {
+      "profile": "الملف الشخصي",
+      "preferences": "التفضيلات",
+      "security": "الأمان",
+      "notifications": "الإخطارات",
+      "about": "حول"
+    },
+    "profile": {
+      "title": "معلومات الملف الشخصي",
+      "name": "الاسم الكامل",
+      "email": "عنوان البريد الإلكتروني",
+      "role": "الدور",
+      "createdAt": "عضو منذ",
+      "edit": "تحرير الملف الشخصي",
+      "save": "حفظ التغييرات",
+      "cancel": "إلغاء"
+    },
+    "preferences": {
+      "title": "التفضيلات",
+      "theme": "المظهر",
+      "themeDark": "مظلم",
+      "themeLight": "مضيء",
+      "themeSystem": "النظام",
+      "language": "اللغة",
+      "locale": "المنطقة",
+      "resultsPerPage": "النتائج في الصفحة",
+      "autoRefresh": "تحديث البيانات تلقائياً"
+    },
+    "security": {
+      "title": "الأمان",
+      "password": "كلمة المرور",
+      "changePassword": "تغيير كلمة المرور",
+      "sessions": "الجلسات النشطة",
+      "logoutAll": "تسجيل الخروج من جميع الجلسات",
+      "twoFactor": "المصادقة الثنائية",
+      "enable": "تفعيل",
+      "disable": "تعطيل"
+    },
+    "notifications": {
+      "title": "الإخطارات",
+      "email": "إخطارات البريد الإلكتروني",
+      "queryResults": "نتائج الاستعلام",
+      "systemUpdates": "تحديثات النظام",
+      "newsletter": "النشرة الإخبارية"
+    },
+    "about": {
+      "title": "حول",
+      "version": "الإصدار",
+      "copyright": "حقوق النشر",
+      "license": "الترخيص",
+      "documentation": "التوثيق",
+      "support": "الدعم"
+    }
+  },
+
+  "components": {
+    "table": {
+      "noData": "لا توجد بيانات متاحة",
+      "loading": "جارٍ التحميل...",
+      "sortAsc": "ترتيب تصاعدي",
+      "sortDesc": "ترتيب تنازلي",
+      "page": "الصفحة {{current}} من {{total}}"
+    },
+    "pagination": {
+      "previous": "السابق",
+      "next": "التالي",
+      "first": "الأول",
+      "last": "الأخير"
+    },
+    "form": {
+      "required": "هذا الحقل مطلوب",
+      "invalidEmail": "يرجى إدخال بريد إلكتروني صحيح",
+      "passwordTooShort": "يجب أن تحتوي كلمة المرور على 8 أحرف على الأقل",
+      "passwordsDoNotMatch": "كلمات المرور غير متطابقة",
+      "submit": "إرسال",
+      "cancel": "إلغاء",
+      "reset": "إعادة تعيين"
+    },
+    "modal": {
+      "close": "إغلاق",
+      "confirm": "تأكيد",
+      "cancel": "إلغاء"
+    },
+    "toast": {
+      "success": "نجاح",
+      "error": "خطأ",
+      "info": "معلومة",
+      "warning": "تحذير"
+    }
+  },
+
+  "errors": {
+    "unauthorized": "أنت غير مصرح بالوصول إلى هذا المورد",
+    "forbidden": "تم رفض الوصول",
+    "notFound": "لم يتم العثور على المورد",
+    "badRequest": "طلب غير صحيح",
+    "serverError": "حدث خطأ في الخادم",
+    "networkError": "خطأ في الشبكة. يرجى التحقق من اتصالك.",
+    "timeout": "انتهاء المهلة الزمنية للطلب",
+    "validationError": "يرجى إصلاح الأخطاء أدناه",
+    "unknownError": "حدث خطأ غير معروف"
+  },
+
+  "sidebar": {
+    "dashboard": "لوحة التحكم",
+    "history": "السجل",
+    "admin": "الإدارة",
+    "observability": "الرصد",
+    "schema": "المخطط",
+    "settings": "الإعدادات"
+  },
+  "common": {
+    "loading": "جارٍ التحميل...",
+    "saving": "جارٍ الحفظ...",
+    "deleting": "جارٍ الحذف...",
+    "search": "بحث...",
+    "filter": "تصفية",
+    "sort": "ترتيب",
+    "export": "تصدير",
+    "import": "استيراد",
+    "download": "تحميل",
+    "upload": "رفع",
+    "edit": "تحرير",
+    "delete": "حذف",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "confirm": "تأكيد",
+    "back": "رجوع",
+    "next": "التالي",
+    "yes": "نعم",
+    "no": "لا",
+    "close": "إغلاق",
+    "open": "فتح",
+    "view": "عرض",
+    "copy": "نسخ",
+    "copied": "تم النسخ إلى الحافظة",
+    "created": "تم الإنشاء",
+    "updated": "تم التحديث",
+    "deleted": "تم الحذف",
+    "status": "الحالة",
+    "actions": "الإجراءات",
+    "noData": "لا توجد بيانات متاحة",
+    "quickActions": "الإجراءات السريعة",
+    "settings": "الإعدادات",
+    "activeOperations": "العمليات النشطة",
+    "running": "الاستعلام قيد التنفيذ",
+    "noActiveQueries": "لا توجد استعلامات نشطة أخرى",
+    "qualityIndicators": "مؤشرات الجودة",
+    "queryAccuracy": "دقة الاستعلام",
+    "systemHealth": "صحة النظام",
+    "basedOnRecent": "بناءً على استعلاماتك الأخيرة",
+    "lastQueries": "آخر 3 استعلامات لك",
+    "suggestion1": "عرض طلبات العملاء حسب المنطقة",
+    "suggestion2": "إجمالي الإيرادات حسب فئة المنتج",
+    "recentQuery1": "أظهر لي أفضل 10 عملاء حسب الإيرادات",
+    "recentQuery2": "الطلبات من الشهر الماضي",
+    "recentQuery3": "تحليل تقسيم العملاء",
+    "minutesAgo": "منذ 5 دقائق",
+    "hoursAgo": "منذ ساعة واحدة",
+    "success": "نجح",
+    "availableTables": "الجداول المتاحة",
+    "tableName": "اسم الجدول",
+    "tableType": "جدول",
+    "explore": "استكشاف"
+  }
+}

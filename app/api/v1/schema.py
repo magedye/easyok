@@ -5,10 +5,49 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.api.dependencies import require_permission, UserContext
 from app.services.schema_policy_service import SchemaPolicyService
 from app.services.vanna_service import VannaService
+from app.services.audit_service import AuditService
 
 router = APIRouter(tags=["schema"])
 policy_service = SchemaPolicyService()
 vanna = VannaService()
+audit_service = AuditService()
+
+
+@router.get("/schema/discover")
+async def discover_schema(
+    user: UserContext = Depends(require_permission("admin:view")),
+):
+    """
+    Read-only discovery of schemas/tables/columns (no caching, no training side effects).
+    """
+    try:
+        schemas = []
+        owners = vanna.db.execute("SELECT DISTINCT OWNER FROM ALL_TABLES")
+        for o in owners or []:
+            owner = o.get("OWNER")
+            tables = vanna.db.execute(
+                f"SELECT TABLE_NAME FROM ALL_TABLES WHERE OWNER = '{owner}' FETCH FIRST 200 ROWS ONLY"
+            )
+            table_entries = []
+            for t in tables or []:
+                name = t.get("TABLE_NAME")
+                cols = vanna.db.execute(
+                    f"SELECT COLUMN_NAME, DATA_TYPE FROM ALL_TAB_COLUMNS WHERE OWNER = '{owner}' AND TABLE_NAME = '{name}'"
+                )
+                table_entries.append({"table": name, "columns": cols or []})
+            schemas.append({"schema": owner, "tables": table_entries})
+        audit_service.log(
+            user_id=user.get("user_id", "anonymous"),
+            role=user.get("role", "guest"),
+            action="policy_preview",
+            resource_id=None,
+            payload={"schemas_count": len(schemas)},
+            status="completed",
+            outcome="success",
+        )
+        return {"schemas": schemas}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/schema/{connection_id}/inspect")
@@ -84,5 +123,28 @@ async def activate_policy(
     try:
         policy = policy_service.activate(policy_id, approver=user.get("user_id"))
         return {"id": policy.id, "status": policy.status}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/schema/policy/commit")
+async def commit_policy(
+    payload: Dict[str, Any],
+    user: UserContext = Depends(require_permission("training:approve")),
+):
+    """
+    Commit a schema policy version (admin-only). No training side effects.
+    """
+    try:
+        policy = policy_service.commit_policy(
+            db_connection_id=payload.get("db_connection_id"),
+            schema_name=(payload.get("schema_name") or "").upper(),
+            allowed_tables=payload.get("allowed_tables") or [],
+            allowed_columns=payload.get("allowed_columns") or {},
+            excluded_tables=payload.get("excluded_tables") or [],
+            excluded_columns=payload.get("excluded_columns") or {},
+            created_by=user.get("user_id"),
+        )
+        return {"id": policy.id, "status": policy.status, "version": policy.version}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))

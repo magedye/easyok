@@ -73,3 +73,26 @@ export async function apiHealth(): Promise<Response> {
     method: 'GET'
   });
 }
+
+export async function apiListFeatureToggles(): Promise<Response> {
+  const url = `${getApiBaseUrl()}/api/v1/admin/settings/feature-toggles`;
+  return fetch(url, { method: 'GET', headers: buildHeaders() });
+}
+
+export async function apiUpdateFeatureToggle(payload: {
+  feature: string;
+  value: boolean;
+  reason: string;
+}): Promise<Response> {
+  const url = `${getApiBaseUrl()}/api/v1/admin/settings/feature-toggle`;
+  return fetch(url, {
+    method: 'POST',
+    headers: buildHeaders(),
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function apiGetSentryIssues(): Promise<Response> {
+  const url = `${getApiBaseUrl()}/api/v1/admin/settings/sentry-issues`;
+  return fetch(url, { method: 'GET', headers: buildHeaders() });
+}

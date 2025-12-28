@@ -4,6 +4,9 @@
 export const API_BASE_URL: string =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
+export const SIGNOZ_DASHBOARD_URL: string =
+  import.meta.env.VITE_SIGNOZ_DASHBOARD_URL || '';
+
 // Storage keys for tokens or other items
 export const TOKEN_STORAGE_KEY = 'token';
 

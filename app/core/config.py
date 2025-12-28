@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     ENABLE_RATE_LIMIT: bool = False
     ENABLE_GZIP_COMPRESSION: bool = True
     ENABLE_PERFORMANCE: bool = True
+    ENABLE_SEMANTIC_CACHE: bool = True
+    ENABLE_ARABIC_NLP: bool = True
+    ADMIN_FEATURE_TOGGLE_API_ENABLED: bool = True
+    ADMIN_FEATURE_TOGGLE_REQUIRE_REASON: bool = True
+    ADMIN_FEATURE_TOGGLE_EMIT_OTEL: bool = True
     # CORS configuration to allow frontend origin
     CORS_ORIGINS: list = ['http://localhost:3000']  # Assuming frontend runs at localhost:3000
     BACKEND_PORT: int = 8000  # Ensuring backend runs on port 8000
@@ -119,6 +124,33 @@ class Settings(BaseSettings):
     PHI3_API_KEY: Optional[str] = None
     PHI3_TIMEOUT: int = 30
 
+    # =========================================================================
+    # Observability / Tracing
+    # =========================================================================
+    OTEL_EXPORTER_OTLP_ENDPOINT: Optional[str] = None
+    OTEL_SAMPLER_RATIO: float = 1.0
+    OTEL_SERVICE_NAME: Optional[str] = None
+    ENABLE_SIGNOZ_ALERTS: bool = False
+    SENTRY_DSN: Optional[str] = None
+    SENTRY_ENVIRONMENT: str = "development"
+    SENTRY_TRACES_SAMPLE_RATE: float = 1.0
+    SENTRY_ATTACH_STACKTRACE: bool = True
+    SENTRY_ENABLE_OTEL_BRIDGE: bool = True
+    SENTRY_API_TOKEN: Optional[str] = None
+    SENTRY_ORG_SLUG: Optional[str] = None
+    SENTRY_PROJECT_SLUG: Optional[str] = None
+
+    # =========================================================================
+    # Semantic Cache
+    # =========================================================================
+    SEMANTIC_CACHE_SIMILARITY_THRESHOLD: float = 0.85
+    SEMANTIC_CACHE_MAX_RESULTS: int = 3
+    SEMANTIC_CACHE_TTL_SECONDS: int = 3600
+    SEMANTIC_CACHE_GOVERNANCE_MODE: Literal["revalidate", "bypass"] = "revalidate"
+    SEMANTIC_CACHE_STORE_SQL: bool = True
+    SEMANTIC_CACHE_STORE_RESULTS: bool = True
+    REDIS_URL: Optional[str] = None
+
     GROQ_API_KEY: Optional[str] = None
     GROQ_MODEL: str = "llama-3.1-8b-instant"
     GROQ_TIMEOUT: int = 30
@@ -138,6 +170,19 @@ class Settings(BaseSettings):
     VANNA_ALLOW_DDL: bool = False
     VANNA_MAX_ROWS: int = 500
     DEFAULT_ROW_LIMIT: int = 100
+    RAGAS_METRICS: str = "context_precision,context_recall,faithfulness,answer_relevance"
+    RAGAS_EXECUTION_MODE: Literal["async", "offline"] = "async"
+    ENABLE_RAGAS_EVALUATION: bool = True
+    RAGAS_LINK_TO_AUDIT_LOG: bool = True
+
+    # =========================================================================
+    # Arabic NLP Pipeline
+    # =========================================================================
+    ENABLE_CAMEL_TOOLS: bool = True
+    ENABLE_FARASA: bool = True
+    FARASA_MODEL_PATH: Optional[str] = None
+    ARABIC_EMBEDDING_MODEL: str = "CAMeL-Lab/bert-base-arabic-camelbert-da"
+    ARABIC_PREPROCESS_BEFORE_RAG: bool = True
 
     # =========================================================================
     # Rate Limiting & Health
@@ -264,6 +309,17 @@ class Settings(BaseSettings):
         """
         provider = info.data.get("DB_PROVIDER")
         return (provider or v).lower()
+
+    @field_validator("SEMANTIC_CACHE_GOVERNANCE_MODE")
+    @classmethod
+    def enforce_safe_cache_mode(cls, v: str, info: ValidationInfo) -> str:
+        """
+        Disallow unsafe semantic cache governance in production.
+        """
+        app_env = info.data.get("APP_ENV", "development")
+        if app_env == "production" and v != "revalidate":
+            raise ValueError("Unsafe semantic cache governance mode in production")
+        return v
 
 
 _settings_cache: Optional[Settings] = None
