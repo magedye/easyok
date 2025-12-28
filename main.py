@@ -38,6 +38,7 @@ from app.api.v1.admin import settings as admin_settings
 from app.services.observability_service import ObservabilityService
 from app.telemetry import setup_tracing
 from app.services.alerting_guard import initialize_alerting
+from app.services.training_readiness_guard import assert_training_readiness, TrainingReadinessError
 
 
 tags_metadata = [{"name": "health", "description": "Health endpoints"}]
@@ -111,6 +112,12 @@ def create_app() -> FastAPI:
 
     # Enforce alert gating early
     initialize_alerting()
+
+    # Enforce training readiness gates (hard fail on violation)
+    try:
+        assert_training_readiness()
+    except TrainingReadinessError as exc:
+        raise RuntimeError(f"Training readiness failed: {exc}") from exc
 
     setup_tracing(app, service_name="easydata-backend")
 

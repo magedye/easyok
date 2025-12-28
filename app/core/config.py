@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     ENABLE_PERFORMANCE: bool = True
     ENABLE_SEMANTIC_CACHE: bool = True
     ENABLE_ARABIC_NLP: bool = True
+    ENABLE_TRAINING_PILOT: bool = False
     ADMIN_FEATURE_TOGGLE_API_ENABLED: bool = True
     ADMIN_FEATURE_TOGGLE_REQUIRE_REASON: bool = True
     ADMIN_FEATURE_TOGGLE_EMIT_OTEL: bool = True

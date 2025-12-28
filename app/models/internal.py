@@ -113,12 +113,37 @@ class TrainingItem(Base):
     __tablename__ = "training_items"
 
     id = Column(Integer, primary_key=True)
-    item_type = Column(String(50), nullable=False)  # ddl | sql | doc
-    payload = Column(Text, nullable=False)  # JSON string
-    status = Column(String(20), default="pending")  # pending | approved | rejected
+    item_type = Column(String(50), nullable=False)  # question_sql | doc
+    question = Column(Text, nullable=False)
+    sql = Column(Text, nullable=False)
+    assumptions = Column(Text, nullable=False)
+    schema_version = Column(String(64), nullable=False, index=True)
+    policy_version = Column(String(64), nullable=False, index=True)
+    status = Column(String(20), default="pending", index=True)  # pending | approved | rejected
     created_at = Column(DateTime, default=datetime.utcnow)
     approved_at = Column(DateTime, nullable=True)
     approved_by = Column(String(255), nullable=True)
+    created_by = Column(String(255), nullable=True)
+
+    __table_args__ = (
+        Index("idx_training_items_schema_policy", "schema_version", "policy_version"),
+    )
+
+
+class TrainingStaging(Base):
+    """Captured feedback awaiting review (staging)."""
+
+    __tablename__ = "training_staging"
+
+    id = Column(Integer, primary_key=True)
+    audit_log_id = Column(Integer, ForeignKey("audit_logs.id"), nullable=True, index=True)
+    training_item_id = Column(Integer, ForeignKey("training_items.id"), nullable=True, index=True)
+    question = Column(Text, nullable=False)
+    sql = Column(Text, nullable=False)
+    assumptions = Column(Text, nullable=False)
+    schema_version = Column(String(64), nullable=True)
+    policy_version = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     created_by = Column(String(255), nullable=True)
 
 
