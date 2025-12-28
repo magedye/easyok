@@ -23,6 +23,7 @@ from app.services.schema_policy_service import SchemaPolicyService
 from app.services.audit_service import AuditService
 from app.services.semantic_cache_service import SemanticCacheService
 from app.services.arabic_query_engine import ArabicQueryEngine
+from app.models.enums.confidence_tier import ConfidenceTier
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
@@ -50,12 +51,16 @@ class OrchestrationService:
         _ = top_k
 
         assumptions: List[str] = []
+        confidence_tier = ConfidenceTier.TIER_0_FORTRESS
 
         # Basic malicious intent check on user question
         lowered_q = question.lower()
         forbidden_tokens = (" drop ", " delete ", " truncate ", " alter ", " update ", " insert ")
         if any(tok.strip() in lowered_q for tok in forbidden_tokens):
             raise InvalidQueryError("Blocked due to unsafe intent")
+
+        if confidence_tier != ConfidenceTier.TIER_0_FORTRESS:
+            raise InvalidQueryError("SECURITY_VIOLATION: Unsupported confidence tier for execution.")
 
         original_question = question
         # Arabic preprocessing (mandatory for Arabic input)
@@ -175,10 +180,13 @@ class OrchestrationService:
             "schema_version": policy.schema_name,
             "original_question": original_question,
             "processed_question": question,
+            "confidence_tier": confidence_tier.value,
         }
 
     async def execute_sql(self, sql: str) -> Any:
         """Execute SQL via the underlying query engine and gracefully handle DB errors."""
+        if not sql:
+            raise InvalidQueryError("SECURITY_VIOLATION: execution payload missing SQL")
         res = await self.vanna_service.execute(sql)
         # If DB provider returned an error marker, propagate as-is
         if isinstance(res, dict) and res.get("error"):

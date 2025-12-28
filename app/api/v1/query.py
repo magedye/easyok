@@ -1,4 +1,6 @@
 import json
+import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -8,8 +10,10 @@ from app.core.config import get_settings
 from app.models.request import QueryRequest
 from app.services.orchestration_service import OrchestrationService
 from app.services.audit_service import AuditService
+from app.services.factory import ServiceFactory
 from app.core.exceptions import InvalidQueryError
 from app.services.schema_policy_service import SchemaPolicyService
+from app.models.enums.confidence_tier import ConfidenceTier
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 import hashlib
@@ -20,6 +24,22 @@ settings = get_settings()
 audit_service = AuditService()
 policy_service = SchemaPolicyService()
 tracer = trace.get_tracer(__name__)
+
+
+def _ts() -> str:
+    return datetime.utcnow().isoformat() + "Z"
+
+
+def _chunk(chunk_type: str, payload: dict, *, trace_id: str, tier: ConfidenceTier, ts: str) -> str:
+    return json.dumps(
+        {
+            "type": chunk_type,
+            "trace_id": trace_id,
+            "confidence_tier": tier.value,
+            "timestamp": ts,
+            "payload": payload,
+        }
+    ) + "\n"
 
 
 @router.post("/ask")
@@ -58,6 +78,8 @@ async def ask(
         tk = tk if tk is not None else 5
 
         chunk_count = 0
+        trace_id = uuid.uuid4().hex
+        advisor = ServiceFactory.advisor()
 
         with tracer.start_as_current_span(
             "ask.request",
@@ -71,6 +93,16 @@ async def ask(
             },
         ):
             try:
+                thinking_ts = _ts()
+                yield _chunk(
+                    "thinking",
+                    {"status": "processing"},
+                    trace_id=trace_id,
+                    tier=ConfidenceTier.TIER_1_LAB,
+                    ts=thinking_ts,
+                )
+                chunk_count += 1
+
                 audit_service.log(
                     user_id=user.get("user_id", "anonymous"),
                     role=user.get("role", "guest"),
@@ -131,19 +163,41 @@ async def ask(
                     outcome="success",
                 )
 
-                yield json.dumps({"type": "technical_view", "payload": technical_view}) + "\n"
+                tier = technical_view.get("confidence_tier", ConfidenceTier.TIER_0_FORTRESS.value)
+                yield _chunk(
+                    "technical_view",
+                    technical_view,
+                    trace_id=trace_id,
+                    tier=ConfidenceTier(tier),
+                    ts=_ts(),
+                )
                 chunk_count += 1
+                explanation = advisor.explain_sql(sql_text)
+                if explanation:
+                    yield _chunk(
+                        "explanation_chunk",
+                        {"sql": sql_text, "explanation": explanation},
+                        trace_id=trace_id,
+                        tier=ConfidenceTier.TIER_1_LAB,
+                        ts=_ts(),
+                    )
+                    chunk_count += 1
 
                 if not technical_view.get("is_safe", False):
-                    yield json.dumps(
-                        {
-                            "type": "error",
-                            "payload": {
-                                "message": "SQL rejected by guard",
-                                "error_code": "invalid_query",
-                            },
-                        }
-                    ) + "\n"
+                    yield _chunk(
+                        "error",
+                        {"message": "SQL rejected by guard", "error_code": "invalid_query"},
+                        trace_id=trace_id,
+                        tier=ConfidenceTier(tier),
+                        ts=_ts(),
+                    )
+                    yield _chunk(
+                        "end",
+                        {"status": "failed", "chunks": chunk_count},
+                        trace_id=trace_id,
+                        tier=ConfidenceTier(tier),
+                        ts=_ts(),
+                    )
                     return
 
                 with tracer.start_as_current_span(
@@ -158,6 +212,34 @@ async def ask(
                         "sql.hash": sql_hash,
                     },
                 ):
+                    # Enforce execution contract boundary
+                    if technical_view.get("confidence_tier") != ConfidenceTier.TIER_0_FORTRESS.value:
+                        audit_service.log(
+                            user_id=user.get("user_id", "anonymous"),
+                            role=user.get("role", "guest"),
+                            action="Boundary_Violation",
+                            resource_id=None,
+                            payload={"reason": "Attempted execution with non-fortress tier"},
+                            question=q_text,
+                            sql=sql_text,
+                            status="blocked",
+                            outcome="failed",
+                        )
+                        yield _chunk(
+                            "error",
+                            {"message": "SECURITY_VIOLATION: execution requires TIER_0_FORTRESS", "error_code": "boundary_violation"},
+                            trace_id=trace_id,
+                            tier=ConfidenceTier.TIER_0_FORTRESS,
+                            ts=_ts(),
+                        )
+                        yield _chunk(
+                            "end",
+                            {"status": "failed", "chunks": chunk_count + 1},
+                            trace_id=trace_id,
+                            tier=ConfidenceTier.TIER_0_FORTRESS,
+                            ts=_ts(),
+                        )
+                        return
                     raw_result = await orchestration_service.execute_sql(sql_text)
 
                 data_payload = orchestration_service.normalise_rows(raw_result)
@@ -189,15 +271,45 @@ async def ask(
                             "policy.version": policy_version,
                         },
                     ):
-                        yield json.dumps({"type": "data", "payload": data_payload}) + "\n"
+                        yield _chunk(
+                            "data_chunk",
+                            {"rows": data_payload, "row_count": len(data_payload)},
+                            trace_id=trace_id,
+                            tier=ConfidenceTier.TIER_0_FORTRESS,
+                            ts=_ts(),
+                        )
                         chunk_count += 1
 
-                    chart_payload = orchestration_service.chart_recommendation(data_payload)
-                    yield json.dumps({"type": "chart", "payload": chart_payload}) + "\n"
+                        chart_payload = orchestration_service.chart_recommendation(data_payload)
+                        columns = list(data_payload[0].keys()) if data_payload and isinstance(data_payload[0], dict) else []
+                        advisory_chart = advisor.suggest_chart(columns)
+                        if advisory_chart:
+                            yield _chunk(
+                                "chart_suggestion_chunk",
+                                {"chart": advisory_chart, "source": "advisory"},
+                                trace_id=trace_id,
+                                tier=ConfidenceTier.TIER_1_LAB,
+                                ts=_ts(),
+                            )
+                            chunk_count += 1
+
+                        summary_payload = orchestration_service.summary_text(raw_result)
+                        yield _chunk(
+                            "business_view",
+                            {"chart": chart_payload, "summary": summary_payload},
+                            trace_id=trace_id,
+                        tier=ConfidenceTier.TIER_1_LAB,
+                        ts=_ts(),
+                    )
                     chunk_count += 1
 
-                    summary_payload = orchestration_service.summary_text(raw_result)
-                    yield json.dumps({"type": "summary", "payload": summary_payload}) + "\n"
+                    yield _chunk(
+                        "end",
+                        {"status": "completed", "chunks": chunk_count},
+                        trace_id=trace_id,
+                        tier=ConfidenceTier.TIER_0_FORTRESS,
+                        ts=_ts(),
+                    )
                     chunk_count += 1
 
                     stream_span.set_attribute("stream.total_chunks", chunk_count)
@@ -216,15 +328,21 @@ async def ask(
                     outcome="failed",
                     error_message=str(e),
                 )
-                yield json.dumps(
-                    {
-                        "type": "error",
-                        "payload": {
-                            "message": "تم حظر الاستعلام لاعتبارات أمان",
-                            "error_code": "SECURITY_VIOLATION",
-                        },
-                    }
-                ) + "\n"
+                err_tier = ConfidenceTier.TIER_0_FORTRESS
+                yield _chunk(
+                    "error",
+                    {"message": "تم حظر الاستعلام لاعتبارات أمان", "error_code": "SECURITY_VIOLATION"},
+                    trace_id=trace_id,
+                    tier=err_tier,
+                    ts=_ts(),
+                )
+                yield _chunk(
+                    "end",
+                    {"status": "failed", "chunks": chunk_count + 1},
+                    trace_id=trace_id,
+                    tier=err_tier,
+                    ts=_ts(),
+                )
             except Exception as e:
                 audit_service.log(
                     user_id=user.get("user_id", "anonymous"),
@@ -238,14 +356,20 @@ async def ask(
                     outcome="failed",
                     error_message=str(e),
                 )
-                yield json.dumps(
-                    {
-                        "type": "error",
-                        "payload": {
-                            "message": str(e),
-                            "error_code": "internal_error",
-                        },
-                    }
-                ) + "\n"
+                err_tier = ConfidenceTier.TIER_0_FORTRESS
+                yield _chunk(
+                    "error",
+                    {"message": str(e), "error_code": "internal_error"},
+                    trace_id=trace_id,
+                    tier=err_tier,
+                    ts=_ts(),
+                )
+                yield _chunk(
+                    "end",
+                    {"status": "failed", "chunks": chunk_count + 1},
+                    trace_id=trace_id,
+                    tier=err_tier,
+                    ts=_ts(),
+                )
 
     return StreamingResponse(ndjson_stream(), media_type="application/x-ndjson")

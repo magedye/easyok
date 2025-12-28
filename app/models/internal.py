@@ -145,6 +145,8 @@ class TrainingStaging(Base):
     policy_version = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     created_by = Column(String(255), nullable=True)
+    status = Column(String(20), default="pending", index=True)
+    rejection_reason = Column(Text, nullable=True)
 
 
 class AssetQuery(Base):

@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     ENABLE_GZIP_COMPRESSION: bool = True
     ENABLE_PERFORMANCE: bool = True
     ENABLE_SEMANTIC_CACHE: bool = True
+    ENABLE_ADVISOR_MODE: bool = False
     ENABLE_ARABIC_NLP: bool = True
     ENABLE_TRAINING_PILOT: bool = False
     ADMIN_FEATURE_TOGGLE_API_ENABLED: bool = True
@@ -151,6 +152,9 @@ class Settings(BaseSettings):
     SEMANTIC_CACHE_STORE_SQL: bool = True
     SEMANTIC_CACHE_STORE_RESULTS: bool = True
     REDIS_URL: Optional[str] = None
+    # Sandbox data strategy (Phase B2)
+    SANDBOX_DATA_STRATEGY: Literal["schema_only", "masked_snapshot", "synthetic_data"] = "schema_only"
+    SANDBOX_SENSITIVE_COLUMNS: list[str] = []
 
     GROQ_API_KEY: Optional[str] = None
     GROQ_MODEL: str = "llama-3.1-8b-instant"

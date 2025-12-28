@@ -69,3 +69,9 @@ def create_vector_provider(settings: Settings):
         return QdrantProvider(settings)
 
     raise ValueError(f"Unsupported VECTOR DB provider: {provider}")
+
+
+def create_training_embedding_service(settings: Settings):
+    from app.services.training_embedding_service import TrainingEmbeddingService
+
+    return TrainingEmbeddingService()

@@ -9,14 +9,11 @@ from pydantic import BaseModel, Field
 from app.api.dependencies import require_permission, UserContext
 from app.core.config import get_settings
 from app.core.db import session_scope
-from app.models.enums.training_status import TrainingStatus
-from app.models.internal import TrainingItem as TrainingItemModel, TrainingStaging, SchemaAccessPolicy
-from app.services.audit_service import AuditService
+from app.models.internal import TrainingStaging, SchemaAccessPolicy
 from app.utils.sql_guard import SQLGuard, SQLGuardViolation
 
 
 router = APIRouter(tags=["feedback"])
-audit_service = AuditService()
 tracer = trace.get_tracer(__name__)
 
 
@@ -37,7 +34,6 @@ async def submit_feedback(
     if not assumptions:
         raise HTTPException(status_code=400, detail="Assumptions are required.")
 
-    # Resolve active policy for metadata/enforcement
     with session_scope() as session:
         policy = (
             session.query(SchemaAccessPolicy)
@@ -46,7 +42,6 @@ async def submit_feedback(
             .first()
         )
 
-    # Validate SQL (with policy if present)
     guard = SQLGuard(settings=settings)
     try:
         normalized_sql = guard.validate_and_normalise(payload.sql, policy=policy)
@@ -56,30 +51,16 @@ async def submit_feedback(
     with tracer.start_as_current_span(
         "training_item.created",
         attributes={
-            "training.status": TrainingStatus.pending.value,
+            "training.status": "pending",
             "schema.version": getattr(policy, "schema_name", None) or "",
             "policy.version": getattr(policy, "version", None) or "",
+            "has_corrected_sql": True,
         },
     ):
         with session_scope() as session:
-            item = TrainingItemModel(
-                item_type="question_sql",
-                question=payload.question,
-                sql=normalized_sql,
-                assumptions=assumptions,
-                schema_version=getattr(policy, "schema_name", "") or "",
-                policy_version=str(getattr(policy, "version", "") or ""),
-                status=TrainingStatus.pending.value,
-                created_by=user.get("user_id"),
-                created_at=datetime.utcnow(),
-            )
-            session.add(item)
-            session.flush()
-            session.refresh(item)
-
             staging = TrainingStaging(
                 audit_log_id=payload.audit_id,
-                training_item_id=item.id,
+                training_item_id=None,
                 question=payload.question,
                 sql=normalized_sql,
                 assumptions=assumptions,
@@ -91,19 +72,4 @@ async def submit_feedback(
             session.add(staging)
             session.flush()
 
-    audit_service.log(
-        user_id=user.get("user_id", "anonymous"),
-        role=user.get("role", "guest"),
-        action="training_item.created",
-        resource_id=str(item.id),
-        status="success",
-        outcome="success",
-        payload={
-            "training_item_id": item.id,
-            "audit_id": payload.audit_id,
-            "schema_version": getattr(policy, "schema_name", "") if policy else "",
-            "policy_version": getattr(policy, "version", "") if policy else "",
-        },
-    )
-
-    return {"training_item_id": item.id, "status": TrainingStatus.pending.value}
+    return {"status": "pending"}

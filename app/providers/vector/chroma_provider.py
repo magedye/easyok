@@ -26,8 +26,9 @@ class ChromaProvider(BaseVectorStore):
             path = Path(self.settings.VECTOR_STORE_PATH)
             path.mkdir(parents=True, exist_ok=True)
             self.client = chromadb.PersistentClient(path=str(path))
-            # Using a single default collection
+            # Using default collections
             self.collection = self.client.get_or_create_collection("training_data")
+            self.training_collection = self.client.get_or_create_collection("training_context")
         except Exception as exc:
             raise AppException(str(exc))
 
@@ -46,5 +47,37 @@ class ChromaProvider(BaseVectorStore):
             docs = results.get("documents", [[]])[0]
             metas = results.get("metadatas", [[]])[0]
             return list(zip(docs, metas))
+        except Exception as exc:
+            raise AppException(str(exc))
+
+    def add_training_context(self, documents: List[str], metadatas: List[Dict[str, any]]) -> None:
+        try:
+            ids = [str(uuid.uuid4()) for _ in documents]
+            self.training_collection.add(ids=ids, documents=documents, metadatas=metadatas)
+        except Exception as exc:
+            raise AppException(str(exc))
+
+    def query_training_context(
+        self,
+        *,
+        query_text: str,
+        schema_version: str,
+        policy_version: str,
+        n_results: int = 5,
+    ) -> List[Dict[str, any]]:
+        try:
+            results = self.training_collection.query(
+                query_texts=[query_text],
+                n_results=n_results,
+                where={
+                    "schema_version": schema_version,
+                    "policy_version": policy_version,
+                },
+            )
+            docs = results.get("documents", [[]])[0]
+            metas = results.get("metadatas", [[]])[0]
+            paired = list(zip(docs, metas))
+            paired.sort(key=lambda x: x[1].get("training_item_id", ""))
+            return [{"document": d, "metadata": m} for d, m in paired]
         except Exception as exc:
             raise AppException(str(exc))
