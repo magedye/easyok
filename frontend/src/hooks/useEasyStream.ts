@@ -1,9 +1,21 @@
 import { useCallback, useRef, useState } from 'react';
 
-import type { AskChunk, AskQuestionPayload } from '../types/api';
+import type {
+  AskChunk,
+  AskQuestionPayload,
+  TechnicalViewPayload,
+  DataPayload,
+  ChartPayload,
+  SummaryPayload
+} from '../types/api';
 import { askQuestion } from '../api/easyStream';
 
 type UseEasyStreamState = {
+  technicalView: TechnicalViewPayload | null;
+  dataRows: Array<Record<string, unknown>>;
+  columns: string[];
+  chart: ChartPayload | null;
+  summary: SummaryPayload | null;
   isStreaming: boolean;
   error: string | null;
 };
@@ -21,6 +33,11 @@ function toErrorMessage(err: unknown): string {
 export function useEasyStream(): UseEasyStreamResult {
   const controllerRef = useRef<AbortController | null>(null);
   const [state, setState] = useState<UseEasyStreamState>({
+    technicalView: null,
+    dataRows: [],
+    columns: [],
+    chart: null,
+    summary: null,
     isStreaming: false,
     error: null
   });
@@ -38,14 +55,66 @@ export function useEasyStream(): UseEasyStreamResult {
       const controller = new AbortController();
       controllerRef.current = controller;
 
-      setState({ isStreaming: true, error: null });
+      setState((s) => ({
+        ...s,
+        isStreaming: true,
+        error: null,
+        dataRows: [],
+        columns: [],
+        chart: null,
+        summary: null,
+        technicalView: null
+      }));
 
       try {
-        await askQuestion(payload, onChunk, { signal: controller.signal });
+        await askQuestion(
+          payload,
+          (chunk) => {
+            switch (chunk.type) {
+              case 'technical_view':
+                setState((s) => ({ ...s, technicalView: chunk.payload as TechnicalViewPayload }));
+                break;
+              case 'data': {
+                const payload = chunk.payload as DataPayload;
+                if (Array.isArray(payload)) {
+                  setState((s) => ({ ...s, dataRows: payload }));
+                } else {
+                  setState((s) => ({
+                    ...s,
+                    dataRows: payload.rows || [],
+                    columns: payload.columns || s.columns
+                  }));
+                }
+                break;
+              }
+              case 'chart':
+                setState((s) => ({ ...s, chart: chunk.payload as ChartPayload }));
+                break;
+              case 'summary':
+                setState((s) => ({ ...s, summary: chunk.payload as SummaryPayload }));
+                break;
+              case 'error':
+                setState((s) => ({ ...s, error: (chunk.payload as any).message || 'Error' }));
+                break;
+              default:
+                break;
+            }
+            onChunk(chunk);
+          },
+          { signal: controller.signal }
+        );
       } catch (err: unknown) {
         const isAbortError = err instanceof DOMException && err.name === 'AbortError';
         if (!isAbortError) {
-          setState({ isStreaming: false, error: toErrorMessage(err) });
+          setState({
+            technicalView: null,
+            dataRows: [],
+            columns: [],
+            chart: null,
+            summary: null,
+            isStreaming: false,
+            error: toErrorMessage(err)
+          });
           throw err;
         }
       } finally {

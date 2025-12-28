@@ -27,23 +27,26 @@ async def submit_ddl(
     payload: DDLRequest,
     user: UserContext = Depends(require_permission("training:upload")),
 ):
-    item = service.submit_training_item(
-        item_type="ddl",
-        payload={"ddl": payload.ddl},
-        created_by=user.get("user_id"),
-    )
-    audit_service.log(
-        user_id=user.get("user_id", "anonymous"),
-        role=user.get("role", "guest"),
-        action="training_submit",
-        resource_id=str(item.id),
-        payload={"type": "ddl"},
-        question="",
-        sql="",
-        status="success",
-        outcome="success",
-    )
-    return {"id": item.id, "status": item.status}
+    try:
+        item = service.submit_training_item(
+            item_type="ddl",
+            payload={"ddl": payload.ddl},
+            created_by=user.get("user_id"),
+        )
+        audit_service.log(
+            user_id=user.get("user_id", "anonymous"),
+            role=user.get("role", "guest"),
+            action="training_submit",
+            resource_id=str(item.id),
+            payload={"type": "ddl"},
+            question="",
+            sql="",
+            status="success",
+            outcome="success",
+        )
+        return {"id": item.id, "status": item.status}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.post("/training/manual")
@@ -51,23 +54,26 @@ async def submit_manual(
     payload: ManualTrainingRequest,
     user: UserContext = Depends(require_permission("training:upload")),
 ):
-    item = service.submit_training_item(
-        item_type="sql",
-        payload={"question": payload.question, "sql": payload.sql, "metadata": payload.metadata or {}},
-        created_by=user.get("user_id"),
-    )
-    audit_service.log(
-        user_id=user.get("user_id", "anonymous"),
-        role=user.get("role", "guest"),
-        action="training_submit",
-        resource_id=str(item.id),
-        payload={"type": "sql"},
-        question=payload.question,
-        sql=payload.sql,
-        status="success",
-        outcome="success",
-    )
-    return {"id": item.id, "status": item.status}
+    try:
+        item = service.submit_training_item(
+            item_type="sql",
+            payload={"question": payload.question, "sql": payload.sql, "metadata": payload.metadata or {}},
+            created_by=user.get("user_id"),
+        )
+        audit_service.log(
+            user_id=user.get("user_id", "anonymous"),
+            role=user.get("role", "guest"),
+            action="training_submit",
+            resource_id=str(item.id),
+            payload={"type": "sql"},
+            question=payload.question,
+            sql=payload.sql,
+            status="success",
+            outcome="success",
+        )
+        return {"id": item.id, "status": item.status}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/training/pending")

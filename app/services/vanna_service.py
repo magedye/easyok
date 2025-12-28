@@ -126,15 +126,14 @@ class VannaService:
 
             sql = await asyncio.wait_for(self.llm.generate_sql(prompt), timeout=5)
             sql_clean = self._sanitize_sql(sql)
+            sql_clean = self._oracle_postprocess(sql_clean)
             if not sql_clean:
-                logger.warning("LLM returned empty SQL; using fallback")
-                return fallback_sql
-
+                raise RuntimeError("Empty SQL after sanitization")
             logger.info("LLM generated SQL: %s", sql_clean)
             return sql_clean
         except Exception as exc:  # pragma: no cover - provider failures
-            logger.warning("LLM SQL generation failed (%s); using fallback", exc)
-            return fallback_sql
+            logger.warning("LLM SQL generation failed (%s)", exc)
+            raise
 
     def _sanitize_sql(self, sql: Any) -> str:
         """Strip markdown fences, leading SQL: prefixes, and trailing semicolons."""
@@ -154,6 +153,39 @@ class VannaService:
         sql_clean = sql_clean.replace("\r", " ").replace("\n", " ")
         sql_clean = sql_clean.strip().strip(";").strip()
         return sql_clean
+
+    def _oracle_postprocess(self, sql: str) -> str:
+        """Apply simple Oracle-safe rewrites: replace LIMIT with FETCH, add GROUP BY when needed."""
+        if not isinstance(sql, str) or not sql:
+            return sql
+        import re
+
+        rewritten = sql
+
+        # Replace LIMIT n with FETCH FIRST n ROWS ONLY
+        m = re.search(r"\sLIMIT\s+(\d+)", rewritten, flags=re.I)
+        if m:
+            n = m.group(1)
+            rewritten = re.sub(r"\sLIMIT\s+\d+", f" FETCH FIRST {n} ROWS ONLY", rewritten, flags=re.I)
+
+        # If SELECT contains aggregates and non-aggregate columns without GROUP BY, add it
+        upper_sql = rewritten.upper()
+        if "GROUP BY" not in upper_sql:
+            select_split = re.split(r"\bFROM\b", rewritten, maxsplit=1, flags=re.I)
+            if select_split:
+                select_part = select_split[0].replace("SELECT", "", 1)
+                cols = [c.strip() for c in select_part.split(",") if c.strip()]
+                agg_tokens = ("COUNT(", "SUM(", "AVG(", "MIN(", "MAX(")
+                has_agg = any(tok in select_part.upper() for tok in agg_tokens)
+                non_agg = [c for c in cols if not any(tok in c.upper() for tok in agg_tokens)]
+                if has_agg and non_agg:
+                    group_clause = " GROUP BY " + ", ".join(non_agg)
+                    if "FETCH FIRST" in upper_sql:
+                        rewritten = re.sub(r"\sFETCH\s+FIRST", f"{group_clause} FETCH FIRST", rewritten, flags=re.I)
+                    else:
+                        rewritten = rewritten + group_clause
+
+        return rewritten
     
     def inject_rls_filters(self, sql: str, data_scope: dict) -> str:
         """

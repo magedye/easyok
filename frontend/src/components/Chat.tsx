@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 
 import { useEasyStream } from '../api';
-import type { AskChunk } from '../types/api';
+import type { AskChunk, SummaryPayload } from '../types/api';
+import { useRunHistory } from '../hooks/useRunHistory';
 
+import AssumptionsPanel from './AssumptionsPanel';
 import DataTable from './DataTable';
 import ChartView from './ChartView';
 import SummaryView from './SummaryView';
+import { Panel } from './UiPrimitives';
 
 interface DataRow {
   [key: string]: any;
@@ -16,10 +19,6 @@ interface ChartConfig {
   config: Record<string, any>;
 }
 
-interface SummaryResult {
-  text: string;
-}
-
 interface StreamError {
   message: string;
 }
@@ -28,8 +27,12 @@ export default function Chat() {
   const [question, setQuestion] = useState('');
   const [dataRows, setDataRows] = useState<DataRow[] | null>(null);
   const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null);
-  const [summary, setSummary] = useState<SummaryResult | null>(null);
+  const [summary, setSummary] = useState<SummaryPayload | null>(null);
   const [error, setError] = useState<StreamError | null>(null);
+  const [technicalView, setTechnicalView] = useState<any | null>(null);
+  const isRtl = true;
+
+  const { addEntry } = useRunHistory();
 
   const { start, cancel, isStreaming } = useEasyStream();
 
@@ -44,27 +47,46 @@ export default function Chat() {
     setChartConfig(null);
     setSummary(null);
     setError(null);
+    setTechnicalView(null);
   };
 
   const handleChunk = (chunk: AskChunk) => {
     switch (chunk.type) {
       case 'technical_view':
-        // Intentionally ignored in MVP UI.
+        setTechnicalView(chunk.payload);
         break;
-      case 'data':
-        setDataRows(chunk.payload as DataRow[]);
+      case 'data': {
+        const payload = chunk.payload as any;
+        const rows = Array.isArray(payload) ? payload : payload.rows || [];
+        setDataRows(rows);
         break;
+      }
       case 'chart':
-        setChartConfig({ type: chunk.payload.chart_type, config: chunk.payload });
+        setChartConfig({ type: (chunk.payload as any).chart_type, config: chunk.payload as any });
         break;
       case 'summary':
-        setSummary({ text: chunk.payload });
+        setSummary(chunk.payload);
+        addEntry({
+          id: `${Date.now()}`,
+          question: question.trim(),
+          technicalView,
+          summary: chunk.payload,
+          timestamp: Date.now(),
+          status: 'success'
+        });
         break;
       case 'error':
-        setError({ message: chunk.payload.message || 'An error occurred' });
+        setError({ message: (chunk.payload as any).message || 'An error occurred' });
+        addEntry({
+          id: `${Date.now()}`,
+          question: question.trim(),
+          technicalView,
+          summary: chunk.payload.message,
+          timestamp: Date.now(),
+          status: 'failed'
+        });
         break;
       default:
-        // Exhaustiveness safeguard for forward-compatible chunk types.
         break;
     }
   };
@@ -84,43 +106,62 @@ export default function Chat() {
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold mb-4">Ask Your Database</h1>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="form-group">
-          <label htmlFor="question">Question</label>
+    <div className="space-y-6" dir="rtl">
+      <Panel
+        title="لوحة الاستعلام المحكّمة"
+        description="أرسل سؤالاً وشاهد المسار المحكوم (عرض تقني، بيانات، رسم، ملخص) دون أي منطق في الواجهة."
+        isRtl={isRtl}
+      >
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <label htmlFor="question" className="text-sm font-medium text-gray-800">
+            السؤال
+          </label>
           <textarea
             id="question"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             rows={3}
-            placeholder="Enter your question in Arabic or English"
+            className="w-full border rounded p-2 text-sm"
+            placeholder="اكتب السؤال بالعربية أو الإنجليزية"
           />
-        </div>
-        <button type="submit" className="btn" disabled={isStreaming}>
-          {isStreaming ? 'Loading...' : 'Ask'}
-        </button>
-      </form>
+          <button type="submit" className="btn" disabled={isStreaming}>
+            {isStreaming ? 'جاري المعالجة...' : 'اسأل'}
+          </button>
+        </form>
+      </Panel>
+
+      {technicalView && (
+        <Panel
+          title="العرض التقني (من الخادم)"
+          description="SQL والافتراضات مشتقة من الـ DDL، فقط للعرض."
+          isRtl={isRtl}
+        >
+          <pre className="bg-blue-50 border border-blue-200 rounded p-3 text-xs overflow-auto">
+            {technicalView.sql}
+          </pre>
+          <AssumptionsPanel technicalView={technicalView} />
+        </Panel>
+      )}
+
       {error && (
-        <div className="bg-red-100 text-red-700 p-2 rounded">Error: {error.message}</div>
+        <div className="bg-red-100 text-red-700 p-2 rounded" dir="rtl">
+          خطأ: {error.message}
+        </div>
       )}
       {dataRows && (
-        <div>
-          <h2 className="text-xl font-semibold mt-6 mb-2">Data</h2>
+        <Panel title="البيانات" description="البيانات كما أرسلها الخادم." isRtl={isRtl}>
           <DataTable rows={dataRows} />
-        </div>
+        </Panel>
       )}
       {chartConfig && (
-        <div>
-          <h2 className="text-xl font-semibold mt-6 mb-2">Chart</h2>
+        <Panel title="الرسم البياني" description="تكوين الرسم من الخادم." isRtl={isRtl}>
           <ChartView type={chartConfig.type} config={chartConfig.config} rows={dataRows || []} />
-        </div>
+        </Panel>
       )}
       {summary && (
-        <div>
-          <h2 className="text-xl font-semibold mt-6 mb-2">Summary</h2>
-          <SummaryView text={summary.text} />
-        </div>
+        <Panel title="الملخص" description="ملخص عربي من الخادم." isRtl={isRtl}>
+          <SummaryView text={typeof summary === 'string' ? summary : (summary as any).text} />
+        </Panel>
       )}
     </div>
   );

@@ -16,19 +16,25 @@ export default function NavBar() {
   };
 
   return (
-    <nav className="navbar px-4 py-2 flex items-center justify-between">
-      <div className="flex items-center space-x-4">
-        <span className="title text-blue-600 text-lg">EasyData</span>
+    <nav className="navbar px-4 py-2 flex items-center justify-between" dir="rtl">
+      <div className="flex items-center space-x-4 space-x-reverse">
+        <span className="title text-blue-600 text-lg font-semibold">EasyData</span>
         {isAuthed && (
           <>
             <Link to="/" className={location.pathname === '/' ? 'font-bold' : ''}>
-              Ask
+              الاستعلام
             </Link>
             <Link
               to="/training"
               className={location.pathname === '/training' ? 'font-bold' : ''}
             >
-              Training
+              التدريب
+            </Link>
+            <Link
+              to="/console"
+              className={location.pathname === '/console' ? 'font-bold' : ''}
+            >
+              العمليات
             </Link>
           </>
         )}
@@ -37,11 +43,11 @@ export default function NavBar() {
         {AUTH_ENABLED &&
           (token ? (
             <button onClick={handleLogout} className="btn bg-red-500 hover:bg-red-600">
-              Logout
+              خروج
             </button>
           ) : (
             <Link to="/login" className="btn">
-              Login
+              دخول
             </Link>
           ))}
       </div>

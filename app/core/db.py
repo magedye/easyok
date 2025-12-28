@@ -32,7 +32,9 @@ def _init_engine():
     else:
         url = settings.SYSTEM_DB_PATH
         _engine = create_engine(url)
-    _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+    _SessionLocal = sessionmaker(
+        autocommit=False, autoflush=False, bind=_engine, expire_on_commit=False
+    )
     Base.metadata.create_all(bind=_engine)
 
 

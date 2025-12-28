@@ -16,6 +16,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Index,
+    JSON,
 )
 from sqlalchemy.orm import declarative_base
 from datetime import datetime
@@ -134,3 +135,21 @@ class AssetQuery(Base):
     semantic_context = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by = Column(String(255), nullable=True)
+
+
+class SchemaAccessPolicy(Base):
+    """Governed schema access policy (scope for training/SQL)."""
+
+    __tablename__ = "schema_access_policies"
+
+    id = Column(String(64), primary_key=True)  # uuid
+    db_connection_id = Column(String(255), nullable=True)
+    schema_name = Column(String(255), nullable=False)
+    allowed_tables = Column(JSON, nullable=True)
+    allowed_columns = Column(JSON, nullable=True)
+    denied_tables = Column(JSON, nullable=True)
+    status = Column(String(32), nullable=False, default="draft")  # draft | active | revoked | rejected_auto
+    created_by = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    approved_by = Column(String(255), nullable=True)
+    approved_at = Column(DateTime, nullable=True)

@@ -8,6 +8,7 @@ from app.core.config import get_settings
 from app.models.request import QueryRequest
 from app.services.orchestration_service import OrchestrationService
 from app.services.audit_service import AuditService
+from app.core.exceptions import InvalidQueryError
 
 router = APIRouter(tags=["query"])
 orchestration_service = OrchestrationService()
@@ -61,12 +62,23 @@ async def ask(
                 question=q_text,
                 sql="",
                 status="started",
-                outcome="success",
+                outcome="started",
             )
             technical_view = await orchestration_service.prepare(
                 question=q_text,
                 top_k=tk,
                 user_context=user,
+            )
+            audit_service.log(
+                user_id=user.get("user_id", "anonymous"),
+                role=user.get("role", "guest"),
+                action="ask",
+                resource_id=None,
+                payload={"question": q_text},
+                question=q_text,
+                sql=technical_view.get("sql", ""),
+                status="completed",
+                outcome="success",
             )
 
             # Chunk 1: technical_view
@@ -99,7 +111,41 @@ async def ask(
             summary_payload = orchestration_service.summary_text(raw_result)
             yield json.dumps({"type": "summary", "payload": summary_payload}) + "\n"
 
+        except InvalidQueryError as e:
+            audit_service.log(
+                user_id=user.get("user_id", "anonymous"),
+                role=user.get("role", "guest"),
+                action="ask",
+                resource_id=None,
+                payload={"question": q_text},
+                question=q_text,
+                sql="",
+                status="blocked",
+                outcome="failed",
+                error_message=str(e),
+            )
+            yield json.dumps(
+                {
+                    "type": "error",
+                    "payload": {
+                        "message": "تم حظر الاستعلام لاعتبارات أمان",
+                        "error_code": "invalid_query",
+                    },
+                }
+            ) + "\n"
         except Exception as e:
+            audit_service.log(
+                user_id=user.get("user_id", "anonymous"),
+                role=user.get("role", "guest"),
+                action="ask",
+                resource_id=None,
+                payload={"question": q_text},
+                question=q_text,
+                sql="",
+                status="failed",
+                outcome="failed",
+                error_message=str(e),
+            )
             # Keep streaming contract even on failure (after start)
             yield json.dumps(
                 {

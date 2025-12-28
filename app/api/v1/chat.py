@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.services.vanna_service import VannaService
 from app.utils.sql_guard import SQLGuard
 from app.services.audit_service import AuditService
+from app.core.exceptions import InvalidQueryError
 
 router = APIRouter(tags=["chat"])
 settings = get_settings()
@@ -107,7 +108,7 @@ async def chat_stream(
             question=question,
             sql="",
             status="started",
-            outcome="success",
+            outcome="started",
         )
         # auth event
         yield f"event: auth\ndata: {json.dumps({'status': 'authenticated' if user.get('is_authenticated') else 'guest'})}\n\n"
@@ -164,6 +165,18 @@ async def chat_stream(
         if not is_safe or not assumptions:
             error_payload = {"code": "invalid_query", "message": "SQL rejected or assumptions missing"}
             yield f"event: error\ndata: {json.dumps(error_payload)}\n\n"
+            audit_service.log(
+                user_id=user.get("user_id", "anonymous"),
+                role=user.get("role", "guest"),
+                action="chat_stream",
+                resource_id=None,
+                payload={"question": question},
+                question=question,
+                sql=sql,
+                status="blocked",
+                outcome="failed",
+                error_message=error_payload["message"],
+            )
             yield "event: done\ndata: {\"status\":\"completed\"}\n\n"
             return
 
@@ -175,6 +188,18 @@ async def chat_stream(
         except Exception as exc:
             error_payload = {"code": "service_unavailable", "message": str(exc)}
             yield f"event: error\ndata: {json.dumps(error_payload)}\n\n"
+            audit_service.log(
+                user_id=user.get("user_id", "anonymous"),
+                role=user.get("role", "guest"),
+                action="chat_stream",
+                resource_id=None,
+                payload={"question": question},
+                question=question,
+                sql=sql,
+                status="failed",
+                outcome="failed",
+                error_message=str(exc),
+            )
             yield "event: done\ndata: {\"status\":\"completed\"}\n\n"
             return
 
@@ -187,6 +212,24 @@ async def chat_stream(
         summary_text = _summary_ar(masked_rows)
         yield f"event: summary\ndata: {json.dumps({'text': summary_text, 'language': 'ar'})}\n\n"
 
+        audit_service.log(
+            user_id=user.get("user_id", "anonymous"),
+            role=user.get("role", "guest"),
+            action="chat_stream",
+            resource_id=None,
+            payload={"question": question},
+            question=question,
+            sql=sql,
+            status="completed",
+            outcome="success",
+        )
         yield "event: done\ndata: {\"status\":\"completed\"}\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    try:
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+    except InvalidQueryError:
+        error_payload = {"code": "invalid_query", "message": "تم حظر الاستعلام لاعتبارات أمان"}
+        async def blocked_stream():
+            yield f"event: error\ndata: {json.dumps(error_payload)}\n\n"
+            yield "event: done\ndata: {\"status\":\"completed\"}\n\n"
+        return StreamingResponse(blocked_stream(), media_type="text/event-stream")

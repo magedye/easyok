@@ -12,16 +12,23 @@ It must remain stateless.
 from __future__ import annotations
 
 from typing import Any, Dict, List
+from datetime import date, datetime
+from decimal import Decimal
 
 from app.api.dependencies import UserContext
 from app.services.vanna_service import VannaService
 from app.utils.sql_guard import SQLGuard
+from app.core.exceptions import InvalidQueryError
+from app.services.schema_policy_service import SchemaPolicyService
+from app.services.audit_service import AuditService
 
 
 class OrchestrationService:
     def __init__(self) -> None:
         self.vanna_service = VannaService()
         self.sql_guard = SQLGuard(self.vanna_service.settings)
+        self.policy_service = SchemaPolicyService()
+        self.audit_service = AuditService()
 
     async def prepare(
         self,
@@ -37,6 +44,12 @@ class OrchestrationService:
 
         assumptions: List[str] = []
 
+        # Basic malicious intent check on user question
+        lowered_q = question.lower()
+        forbidden_tokens = (" drop ", " delete ", " truncate ", " alter ", " update ", " insert ")
+        if any(tok.strip() in lowered_q for tok in forbidden_tokens):
+            raise InvalidQueryError("Blocked due to unsafe intent")
+
         sql = await self.vanna_service.generate_sql(question)
         if self.vanna_service.settings.RLS_ENABLED:
             sql = self.vanna_service.inject_rls_filters(
@@ -45,16 +58,48 @@ class OrchestrationService:
             )
 
         tables = self._referenced_tables(sql)
-        if tables:
-            assumptions.extend([f"Assuming table {owner + '.' if owner else ''}{tbl} exists" for owner, tbl in tables])
+        assumptions.extend(self._assumptions_from_metadata(tables))
         if not assumptions:
-            assumptions.append("Assuming schema is trained and referenced columns exist.")
+            assumptions.append("تم بناء الافتراضات استناداً إلى تعريفات DDL (الأعمدة والأنواع والقيود) دون أسماء محددة.")
+
+        # Enforce active policy
+        policy = self.policy_service.get_active()
+        if not policy:
+            raise InvalidQueryError("SECURITY_VIOLATION: لا توجد سياسة وصول مفعّلة.")
+        if tables and not self._tables_in_policy(tables, policy):
+            self.audit_service.log(
+                user_id=user_context.get("user_id", "anonymous"),
+                role=user_context.get("role", "guest"),
+                action="Blocked_SQL_Attempt",
+                resource_id=None,
+                payload={"question": question, "reason": "table_scope_violation"},
+                status="failed",
+                outcome="failed",
+                error_message="SECURITY_VIOLATION: خارج نطاق السياسة",
+            )
+            raise InvalidQueryError("SECURITY_VIOLATION: الجداول خارج نطاق السياسة المفعّلة.")
+        if tables and not self._columns_in_policy(sql, tables, policy):
+            self.audit_service.log(
+                user_id=user_context.get("user_id", "anonymous"),
+                role=user_context.get("role", "guest"),
+                action="Blocked_SQL_Attempt",
+                resource_id=None,
+                payload={"question": question, "reason": "column_scope_violation"},
+                status="failed",
+                outcome="failed",
+                error_message="SECURITY_VIOLATION: أعمدة خارج نطاق السياسة",
+            )
+            raise InvalidQueryError("SECURITY_VIOLATION: الأعمدة خارج نطاق السياسة المفعّلة.")
 
         is_safe = True
         try:
             sql = self.sql_guard.validate_and_normalise(sql)
         except Exception:
             is_safe = False
+            sql = ""
+
+        if not is_safe or not sql:
+            raise InvalidQueryError("Blocked or invalid SQL")
 
         return {"sql": sql, "assumptions": assumptions, "is_safe": is_safe}
 
@@ -78,14 +123,10 @@ class OrchestrationService:
 
         if isinstance(raw_result, dict) and isinstance(raw_result.get("rows"), list):
             rows = raw_result["rows"]
-            return rows if all(isinstance(r, dict) for r in rows) else [
-                {"value": r} for r in rows
-            ]
+            return self._serialise_rows(rows)
 
         if isinstance(raw_result, list):
-            return raw_result if all(isinstance(r, dict) for r in raw_result) else [
-                {"value": r} for r in raw_result
-            ]
+            return self._serialise_rows(raw_result)
 
         if raw_result is None:
             return []
@@ -94,6 +135,23 @@ class OrchestrationService:
             return [raw_result]
 
         return [{"value": raw_result}]
+
+    def _serialise_rows(self, rows: List[Any]) -> List[Dict[str, Any]]:
+        """Ensure rows are JSON-serialisable (datetime/Decimal -> strings/floats)."""
+        serialised: List[Dict[str, Any]] = []
+        for r in rows:
+            if isinstance(r, dict):
+                serialised.append({k: self._serialise_value(v) for k, v in r.items()})
+            else:
+                serialised.append({"value": self._serialise_value(r)})
+        return serialised
+
+    def _serialise_value(self, v: Any) -> Any:
+        if isinstance(v, (datetime, date)):
+            return v.isoformat()
+        if isinstance(v, Decimal):
+            return float(v)
+        return v
 
     def chart_recommendation(self, rows: List[Dict[str, Any]]) -> Dict[str, str]:
         """Return `chart.payload` with keys: chart_type, x, y."""
@@ -120,7 +178,8 @@ class OrchestrationService:
         message instead of the generic 'ok'.
         """
         if isinstance(raw_result, dict) and raw_result.get("error"):
-            return str(raw_result.get("error"))
+            msg = str(raw_result.get("error"))
+            return f"فشل الاستعلام: {msg}. تحقق من الأعمدة والأنواع المعرّفة في الـ DDL وقم بتبسيط السؤال."
 
         # If upstream produced a prepared 'summary', prefer it
         if isinstance(raw_result, dict) and isinstance(raw_result.get("summary"), str):
@@ -136,7 +195,7 @@ class OrchestrationService:
         if rows is not None:
             count = len(rows)
             if count == 0:
-                return "لا توجد بيانات"
+                return "لا توجد بيانات مطابقة. جرّب تضييق التاريخ أو تحديد أعمدة زمنية/عددية كما هو مذكور في الـ DDL."
             if count == 1:
                 return "تم إرجاع صف واحد."
             return f"تم إرجاع {count} صفوف."
@@ -166,3 +225,66 @@ class OrchestrationService:
             else:
                 out.append(("", identifier.upper()))
         return out
+
+    def _assumptions_from_metadata(self, tables: List[tuple]) -> List[str]:
+        """Derive assumptions from DDL metadata without hardcoding schema specifics."""
+        assumptions: List[str] = []
+        if not tables:
+            assumptions.append("تم الاعتماد على تعريفات DDL (الأعمدة والأنواع والقيود) دون تحديد جداول صريحة.")
+            return assumptions
+
+        for owner, tbl in tables:
+            try:
+                owner_clause = f" AND OWNER = '{owner}'" if owner else ""
+                sql = (
+                    "SELECT COLUMN_NAME, DATA_TYPE FROM ALL_TAB_COLUMNS "
+                    f"WHERE TABLE_NAME = '{tbl}'{owner_clause}"
+                )
+                cols = self.vanna_service.db.execute(sql)
+                if not cols:
+                    assumptions.append("الاعتماد على DDL فقط؛ الجدول المشار إليه غير متاح في التعريفات الحالية.")
+                    continue
+
+                col_types = {c.get("COLUMN_NAME"): (c.get("DATA_TYPE") or "").upper() for c in cols}
+                temporal = [c for c, t in col_types.items() if "DATE" in t or "TIME" in t]
+                numeric = [c for c, t in col_types.items() if any(k in t for k in ["NUMBER", "DEC", "INT", "FLOAT"])]
+
+        assumptions.append(
+            "تم الاستناد إلى أعمدة DDL المتاحة (أنواع/قيود)؛ أعمدة زمنية محتملة: "
+            f"{', '.join(temporal) if temporal else 'غير محددة'}؛ "
+            f"أعمدة رقمية للتجميع: {', '.join(numeric) if numeric else 'غير محددة'}."
+        )
+    except Exception:
+        assumptions.append("تعذر قراءة تعريفات DDL؛ قد تكون الافتراضات أقل دقة.")
+
+        assumptions.append("Analysis is strictly restricted to the tables and columns defined in the active Schema Access Policy.")
+
+    return assumptions
+
+def _tables_in_policy(self, tables: List[tuple], policy) -> bool:
+    allowed_tables = (policy.allowed_tables or [])
+    denied_tables = (policy.denied_tables or [])
+        # If no allowed tables defined, treat as all allowed except explicit denied.
+        for _, tbl in tables:
+            if denied_tables and tbl in denied_tables:
+                return False
+        if allowed_tables and tbl not in allowed_tables:
+            return False
+    return True
+
+    def _columns_in_policy(self, sql: str, tables: List[tuple], policy) -> bool:
+        """Check column references against policy.allowed_columns."""
+        allowed_columns = policy.allowed_columns or {}
+        if not allowed_columns:
+            return True
+        import re
+
+        # Collect explicit table.column references
+        tokens = re.findall(r"([A-Z0-9_]+)\.([A-Z0-9_]+)", sql.upper())
+        for tbl_owner, col in tokens:
+            # tbl_owner may be table or schema.table split; focus on table token
+            tbl = tbl_owner.split(".")[-1]
+            allowed_for_table = allowed_columns.get(tbl) or allowed_columns.get(tbl_owner) or []
+            if allowed_for_table and col not in [c.upper() for c in allowed_for_table]:
+                return False
+        return True

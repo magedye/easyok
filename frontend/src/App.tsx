@@ -3,6 +3,7 @@ import Chat from './components/Chat';
 import TrainingUpload from './components/TrainingUpload';
 import Login from './components/Login';
 import NavBar from './components/NavBar';
+import OperationalConsole from './components/OperationalConsole';
 
 import { AUTH_ENABLED, TOKEN_STORAGE_KEY } from './config';
 
@@ -33,6 +34,10 @@ export default function App() {
           <Route
             path="/training"
             element={isAuthed ? <TrainingUpload /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="/console"
+            element={isAuthed ? <OperationalConsole /> : <Navigate to="/login" replace />}
           />
           <Route path="/" element={isAuthed ? <Chat /> : <Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
