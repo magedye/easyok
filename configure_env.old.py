@@ -1,37 +1,12 @@
 import os
 from typing import Dict, List, Optional
 
-"""
-EasyData Environment Configuration Utility
-==========================================
-
-Purpose
--------
-Safely guide operators through configuring a validated `.env` file
-based on `.env.example`, while minimizing configuration errors.
-
-Design Principles
------------------
-- Interactive, explicit choices for critical selectors
-- Provider-aware prompting (DB / LLM)
-- No implicit defaults or silent overwrites
-- Format-safe file rewriting
-- Human-in-the-loop by design
-
-Scope
------
-- This script ONLY edits existing variables in `.env`
-- It NEVER introduces new keys
-- It NEVER executes or validates connections
-"""
-
 # ============================================================================
 # Constants
 # ============================================================================
 
 CHANGE_MARKER = ">>> CHANGE ME <<<"
 
-# Variables with constrained choices
 CHOICE_VARIABLES = {
     "APP_ENV": ["development", "staging", "production"],
     "DB_PROVIDER": ["oracle", "mssql"],
@@ -42,7 +17,6 @@ CHOICE_VARIABLES = {
     "RLS_ENABLED": ["true", "false"],
 }
 
-# Core selectors that define system topology
 CORE_SELECTOR_KEYS = [
     "APP_ENV",
     "AUTH_ENABLED",
@@ -53,7 +27,6 @@ CORE_SELECTOR_KEYS = [
     "VECTOR_DB",
 ]
 
-# DB-provider–specific required variables
 DB_PROVIDER_VARIABLES = {
     "oracle": [
         "ORACLE_CONNECTION_STRING",
@@ -63,7 +36,6 @@ DB_PROVIDER_VARIABLES = {
     ],
 }
 
-# LLM-provider–specific required variables
 LLM_PROVIDER_VARIABLES = {
     "openai": [
         "OPENAI_API_KEY",
@@ -91,7 +63,6 @@ LLM_PROVIDER_VARIABLES = {
     ],
 }
 
-# Sensitive values that must always be confirmed if present
 ALWAYS_PROMPT_IF_PRESENT = {
     "JWT_SECRET_KEY",
 }
@@ -101,14 +72,12 @@ ALWAYS_PROMPT_IF_PRESENT = {
 # ============================================================================
 
 def read_lines(path: str) -> List[str]:
-    """Read a file as raw lines (preserves formatting)."""
     with open(path, "r", encoding="utf-8") as f:
         return f.readlines()
 
 
 def parse_env_values(path: str) -> Dict[str, str]:
-    """Parse KEY=VALUE pairs from a .env file."""
-    values: Dict[str, str] = {}
+    values = {}
     if not os.path.exists(path):
         return values
 
@@ -123,10 +92,6 @@ def parse_env_values(path: str) -> Dict[str, str]:
 
 
 def extract_marked_keys(example_path: str) -> List[str]:
-    """
-    Extract keys explicitly marked for review in `.env.example`
-    using the CHANGE_MARKER.
-    """
     keys = set()
     with open(example_path, "r", encoding="utf-8") as f:
         for line in f:
@@ -141,10 +106,6 @@ def prompt_with_choices(
     current_value: str,
     choices: Optional[List[str]] = None,
 ) -> str:
-    """
-    Prompt the operator to confirm or change a variable.
-    Supports enumerated choices when applicable.
-    """
     print(f"\nVariable: {key}")
     print(f"Current value: {current_value or '<empty>'}")
 
@@ -186,10 +147,7 @@ def prompt_with_choices(
 def configure_env(
     example_path: str = ".env.example",
     env_path: str = ".env",
-) -> None:
-    """
-    Interactive, safe configuration of `.env` based on existing values.
-    """
+):
     if not os.path.exists(example_path):
         print(f"ERROR: Reference file '{example_path}' not found.")
         return
@@ -198,6 +156,7 @@ def configure_env(
         print(f"ERROR: Target file '{env_path}' not found.")
         return
 
+    example_marked_keys = set(extract_marked_keys(example_path))
     env_lines = read_lines(env_path)
     current_values = parse_env_values(env_path)
     updates: Dict[str, str] = {}
@@ -246,7 +205,7 @@ def configure_env(
             updates[key] = new_value
 
     # ----------------------------------------------------------------------
-    # Phase 4: Always-confirm sensitive keys
+    # Phase 4: Always-prompt sensitive keys (if present)
     # ----------------------------------------------------------------------
     for key in ALWAYS_PROMPT_IF_PRESENT:
         if key not in current_values:
@@ -261,7 +220,7 @@ def configure_env(
         return
 
     # ----------------------------------------------------------------------
-    # Apply updates (format-safe rewrite)
+    # Apply updates (format-safe)
     # ----------------------------------------------------------------------
     with open(env_path, "w", encoding="utf-8") as f:
         for line in env_lines:
@@ -282,3 +241,4 @@ def configure_env(
 
 if __name__ == "__main__":
     configure_env()
+
