@@ -1,17 +1,1 @@
-ماذا هذا الحل هو الأفضل للنظام حالياً؟
-استقلالية المكونات (Decoupling): تحويل المصادقة إلى Optional Dependency يسمح للمطور باختبار "لب" النظام (توليد SQL) دون الحاجة لإعداد توكنات JWT في كل مرة، وهو أمر حيوي في مرحلة الـ MVP.
-
-مركزية القرار (SSOT): نقل الإعدادات إلى core/config.py ينهي مشكلة القيم المكتوبة صلحاً (Hard-coded) ويجعل ملف .env هو المتحكم الوحيد في سلوك النظام.
-
-المرونة (Plug & Play): فصل الـ RLS والـ RBAC كـ "مفاتيح تبديل" يجعل النظام قابلاً للتكيف مع بيئات عمل مختلفة (مثلاً: بيئة داخلية آمنة لا تحتاج RLS مقابل بيئة سحابية تتطلبه).
-هل نحن متوافقون مع الملفات المرفقة؟ (بشكل صريح)
-محور	التوافق
-استخدام Vanna Core	✅ نعم
-RAG + Vector DB	✅ نعم
-SQL Adaptation & Learning	✅ نعم
-Progressive Results	✅ نعم
-Oracle-first	✅ نعم
-Read-Only / Firewall	✅ نعم
-RBAC / RLS	✅ نعم
-Chat-like UX (مستقبليًا)	🔜 مخطط
-SSE / Integrations	🔜 لاحقًا
+tree -I "__pycache__|.venv|venv|env|build|dist|*.egg-info|.installed.cfg|.pytest_cache|.mypy_cache|.coverage|htmlcov|.tox|node_modules|npm-debug.log*|yarn-debug.log*|yarn-error.log*|dist|out|.vite|generated|client|openapi.json|chroma_db|discovery_buffer|*.db|*.sqlite*|.env*|.python-version|*.pem|*.key|*.crt|*.log|logs|.sentry-debug-log|.otel-cache|.vscode|.idea|*.swp|*.swo|.DS_Store|Thumbs.db"

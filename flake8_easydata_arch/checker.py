@@ -1,5 +1,5 @@
 import ast
-from typing import Generator, Tuple, Type
+from typing import Generator, Optional, Tuple, Type
 
 # Architectural Contract (ADR-0018)
 CORE_PATHS = (
@@ -101,9 +101,17 @@ class EasyDataArchChecker:
         """Check if current file is in Core layer."""
         return any(self.filename.startswith(p) for p in CORE_PATHS)
 
-    def _is_isolated(self) -> bool:
-        """Check if current file is in Isolated Concerns."""
-        return any(self.filename.startswith(p) for p in ISOLATED_CONCERNS)
+    def _is_isolated(self, module: Optional[str] = None) -> bool:
+        """Check if current file or imported module belongs to Isolated concerns."""
+        if module is None:
+            return any(self.filename.startswith(p) for p in ISOLATED_CONCERNS)
+
+        normalized = module.replace(".", "/")
+        for path in ISOLATED_CONCERNS:
+            target = path.replace("app/", "")
+            if normalized.startswith(path) or normalized.startswith(target):
+                return True
+        return False
 
     def _is_services(self) -> bool:
         """Check if current file is in Services layer."""
