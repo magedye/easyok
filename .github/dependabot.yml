@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # 🐍 تحديث حزم بايثون (pip)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # 📦 تحديث حزم الفرونت إيند (npm)
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+
+ 
