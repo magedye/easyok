@@ -1,284 +1,159 @@
-import os
-from typing import Dict, List, Optional
+#!/usr/bin/env python3
+import shutil
+import datetime
+from pathlib import Path
 
-"""
-EasyData Environment Configuration Utility
-==========================================
 
-Purpose
--------
-Safely guide operators through configuring a validated `.env` file
-based on `.env.example`, while minimizing configuration errors.
-
-Design Principles
------------------
-- Interactive, explicit choices for critical selectors
-- Provider-aware prompting (DB / LLM)
-- No implicit defaults or silent overwrites
-- Format-safe file rewriting
-- Human-in-the-loop by design
-
-Scope
------
-- This script ONLY edits existing variables in `.env`
-- It NEVER introduces new keys
-- It NEVER executes or validates connections
-"""
-
-# ============================================================================
-# Constants
-# ============================================================================
-
-CHANGE_MARKER = ">>> CHANGE ME <<<"
-
-# Variables with constrained choices
-CHOICE_VARIABLES = {
-    "APP_ENV": ["development", "staging", "production"],
-    "DB_PROVIDER": ["oracle", "mssql"],
-    "LLM_PROVIDER": ["openai", "google", "ollama", "openai_compatible", "groq"],
-    "VECTOR_DB": ["chromadb", "qdrant"],
-    "AUTH_ENABLED": ["true", "false"],
-    "RBAC_ENABLED": ["true", "false"],
-    "RLS_ENABLED": ["true", "false"],
-}
-
-# Core selectors that define system topology
-CORE_SELECTOR_KEYS = [
-    "APP_ENV",
-    "AUTH_ENABLED",
-    "RBAC_ENABLED",
-    "RLS_ENABLED",
-    "DB_PROVIDER",
-    "LLM_PROVIDER",
-    "VECTOR_DB",
+# ---------------------------------------------------------------------------
+# Supported environment sources
+# ---------------------------------------------------------------------------
+ALLOWED_SOURCES = [
+    ".env.schema",
+    ".env.local",
+    ".env.production",
 ]
 
-# DB-provider–specific required variables
-DB_PROVIDER_VARIABLES = {
-    "oracle": [
-        "ORACLE_CONNECTION_STRING",
-    ],
-    "mssql": [
-        "MSSQL_CONNECTION_STRING",
-    ],
-}
-
-# LLM-provider–specific required variables
-LLM_PROVIDER_VARIABLES = {
-    "openai": [
-        "OPENAI_API_KEY",
-        "OPENAI_MODEL",
-        "OPENAI_TIMEOUT",
-    ],
-    "google": [
-        "GOOGLE_API_KEY",
-        "GOOGLE_MODEL",
-    ],
-    "ollama": [
-        "OLLAMA_BASE_URL",
-        "OLLAMA_MODEL",
-    ],
-    "openai_compatible": [
-        "PHI3_BASE_URL",
-        "PHI3_MODEL",
-        "PHI3_API_KEY",
-        "PHI3_TIMEOUT",
-    ],
-    "groq": [
-        "GROQ_API_KEY",
-        "GROQ_MODEL",
-        "GROQ_TIMEOUT",
-    ],
-}
-
-# Sensitive values that must always be confirmed if present
-ALWAYS_PROMPT_IF_PRESENT = {
-    "JWT_SECRET_KEY",
-}
-
-# ============================================================================
-# Helpers
-# ============================================================================
-
-def read_lines(path: str) -> List[str]:
-    """Read a file as raw lines (preserves formatting)."""
-    with open(path, "r", encoding="utf-8") as f:
-        return f.readlines()
+DEFAULT_TARGET = ".env"
 
 
-def parse_env_values(path: str) -> Dict[str, str]:
-    """Parse KEY=VALUE pairs from a .env file."""
-    values: Dict[str, str] = {}
-    if not os.path.exists(path):
-        return values
+def choose_file(prompt, options, default=None):
+    print(prompt)
+    for i, opt in enumerate(options, start=1):
+        print(f"  [{i}] {opt}")
+    if default:
+        print(f"Press ENTER for default: {default}")
 
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#") or "=" not in stripped:
-                continue
-            key, value = stripped.split("=", 1)
-            values[key.strip()] = value.strip()
-    return values
+    while True:
+        choice = input("> ").strip()
+        if not choice and default:
+            return default
+        if choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(options):
+                return options[idx]
+        print("Invalid selection.")
 
 
-def extract_marked_keys(example_path: str) -> List[str]:
+def parse_env_lines(lines):
     """
-    Extract keys explicitly marked for review in `.env.example`
-    using the CHANGE_MARKER.
+    Returns:
+    - dict of key -> (index, value)
     """
-    keys = set()
-    with open(example_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if CHANGE_MARKER in line and "=" in line:
-                key = line.split("=", 1)[0].strip()
-                keys.add(key)
-    return sorted(keys)
-
-
-def prompt_with_choices(
-    key: str,
-    current_value: str,
-    choices: Optional[List[str]] = None,
-) -> str:
-    """
-    Prompt the operator to confirm or change a variable.
-    Supports enumerated choices when applicable.
-    """
-    print(f"\nVariable: {key}")
-    print(f"Current value: {current_value or '<empty>'}")
-
-    if choices:
-        print("Available options:")
-        for i, opt in enumerate(choices, start=1):
-            print(f"  {i}) {opt}")
-
-        user_input = input(
-            "Select option number, type value directly, or press Enter to keep current: "
-        ).strip()
-
-        if not user_input:
-            return current_value
-
-        if user_input.isdigit():
-            idx = int(user_input) - 1
-            if 0 <= idx < len(choices):
-                return choices[idx]
-            print("Invalid option. Keeping current value.")
-            return current_value
-
-        if user_input in choices:
-            return user_input
-
-        print("Invalid value. Keeping current value.")
-        return current_value
-
-    user_input = input(
-        "Press Enter to keep current value, or type new value: "
-    ).strip()
-    return user_input if user_input else current_value
-
-
-# ============================================================================
-# Main
-# ============================================================================
-
-def configure_env(
-    example_path: str = ".env.example",
-    env_path: str = ".env",
-) -> None:
-    """
-    Interactive, safe configuration of `.env` based on existing values.
-    """
-    if not os.path.exists(example_path):
-        print(f"ERROR: Reference file '{example_path}' not found.")
-        return
-
-    if not os.path.exists(env_path):
-        print(f"ERROR: Target file '{env_path}' not found.")
-        return
-
-    env_lines = read_lines(env_path)
-    current_values = parse_env_values(env_path)
-    updates: Dict[str, str] = {}
-
-    print("\nEasyData Interactive Environment Configuration")
-    print("=" * 60)
-    print("Only relevant variables will be shown.")
-    print("Press Enter to keep the current value.\n")
-
-    # ----------------------------------------------------------------------
-    # Phase 1: Core selectors
-    # ----------------------------------------------------------------------
-    for key in CORE_SELECTOR_KEYS:
-        if key not in current_values:
+    mapping = {}
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
             continue
+        key, value = stripped.split("=", 1)
+        mapping[key] = (i, value)
+    return mapping
 
-        current_value = current_values.get(key, "")
-        new_value = prompt_with_choices(
-            key,
-            current_value,
-            CHOICE_VARIABLES.get(key),
-        )
 
-        if new_value != current_value:
-            updates[key] = new_value
-            current_values[key] = new_value  # update session state
+def backup_target(path: Path):
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = path.with_suffix(f".backup.{timestamp}")
+    shutil.copy2(path, backup_path)
+    print(f"[OK] Backup created: {backup_path}")
+    return backup_path
 
-    # ----------------------------------------------------------------------
-    # Phase 2: DB provider-specific variables
-    # ----------------------------------------------------------------------
-    db_provider = current_values.get("DB_PROVIDER")
-    for key in DB_PROVIDER_VARIABLES.get(db_provider, []):
-        current_value = current_values.get(key, "")
-        new_value = prompt_with_choices(key, current_value)
-        if new_value != current_value:
-            updates[key] = new_value
 
-    # ----------------------------------------------------------------------
-    # Phase 3: LLM provider-specific variables
-    # ----------------------------------------------------------------------
-    llm_provider = current_values.get("LLM_PROVIDER")
-    for key in LLM_PROVIDER_VARIABLES.get(llm_provider, []):
-        current_value = current_values.get(key, "")
-        new_value = prompt_with_choices(key, current_value)
-        if new_value != current_value:
-            updates[key] = new_value
+def prompt_user(key, old, new):
+    print("\n────────────────────────────────────────")
+    print(f"Variable       : {key}")
+    print(f"Current value  : {old}")
+    print(f"Source value   : {new}")
+    print("Choose:")
+    print("  [1] Keep current value")
+    print("  [2] Replace with source value")
+    print("  [3] Enter new value")
 
-    # ----------------------------------------------------------------------
-    # Phase 4: Always-confirm sensitive keys
-    # ----------------------------------------------------------------------
-    for key in ALWAYS_PROMPT_IF_PRESENT:
-        if key not in current_values:
-            continue
-        current_value = current_values.get(key, "")
-        new_value = prompt_with_choices(key, current_value)
-        if new_value != current_value:
-            updates[key] = new_value
+    while True:
+        choice = input("Your choice (1/2/3): ").strip()
+        if choice == "1":
+            return old
+        elif choice == "2":
+            return new
+        elif choice == "3":
+            return input("Enter new value: ")
+        else:
+            print("Invalid choice.")
 
-    if not updates:
-        print("\nNo changes were made.")
+
+def main():
+    print("=== Environment Synchronization Utility ===")
+
+    source_file = choose_file(
+        "Select SOURCE environment file:",
+        ALLOWED_SOURCES,
+    )
+
+    target_file = choose_file(
+        "Select TARGET environment file:",
+        [DEFAULT_TARGET],
+        default=DEFAULT_TARGET,
+    )
+
+    source_path = Path(source_file)
+    target_path = Path(target_file)
+
+    if not source_path.exists():
+        raise FileNotFoundError(f"Source file not found: {source_file}")
+
+    # If target does not exist → create from source
+    if not target_path.exists():
+        print(f"[INFO] {target_file} not found. Creating from {source_file}.")
+        shutil.copy2(source_path, target_path)
+        print(f"[OK] {target_file} created.")
         return
 
-    # ----------------------------------------------------------------------
-    # Apply updates (format-safe rewrite)
-    # ----------------------------------------------------------------------
-    with open(env_path, "w", encoding="utf-8") as f:
-        for line in env_lines:
-            stripped = line.strip()
-            if stripped and not stripped.startswith("#") and "=" in stripped:
-                key = stripped.split("=", 1)[0].strip()
-                if key in updates:
-                    prefix = line.split("=", 1)[0]
-                    f.write(f"{prefix}={updates[key]}\n")
-                    continue
-            f.write(line)
+    # Read files
+    source_lines = source_path.read_text().splitlines()
+    target_lines = target_path.read_text().splitlines()
 
-    print("\nSUCCESS: .env updated safely.")
-    print("Modified variables:")
-    for k in updates:
-        print(f" - {k}")
+    source_map = parse_env_lines(source_lines)
+    target_map = parse_env_lines(target_lines)
+
+    # Backup
+    backup_target(target_path)
+
+    report = {
+        "kept": [],
+        "replaced": [],
+        "custom": [],
+        "added": [],
+    }
+
+    # Synchronize variables
+    for key, (_, src_val) in source_map.items():
+        if key in target_map:
+            tgt_idx, tgt_val = target_map[key]
+            if tgt_val != src_val:
+                chosen = prompt_user(key, tgt_val, src_val)
+                target_lines[tgt_idx] = f"{key}={chosen}"
+                if chosen == tgt_val:
+                    report["kept"].append(key)
+                elif chosen == src_val:
+                    report["replaced"].append(key)
+                else:
+                    report["custom"].append(key)
+        else:
+            target_lines.append(f"{key}={src_val}")
+            report["added"].append(key)
+
+    # Write updated file
+    target_path.write_text("\n".join(target_lines) + "\n")
+
+    # Final report
+    print("\n================ CHANGE REPORT ================")
+    for section, keys in report.items():
+        print(f"{section.upper():>10}: {len(keys)}")
+        for k in keys:
+            print(f"  - {k}")
+    print("================================================")
+    print("[DONE] Environment synchronization complete.")
+    print(f"Source: {source_file}")
+    print(f"Target: {target_file}")
 
 
 if __name__ == "__main__":
-    configure_env()
+    main()

@@ -6,11 +6,11 @@
 # STANDARDS:
 # - ADR-0014: Context-Aware RBAC (Local Bypass Support)
 # - OpenAPI Strict Validation
-# - Governance-Enforced (.env.local requirement)
+# - Governance-Enforced (.env requirement)
 # - Enterprise-Grade Reporting
 #
 # EXECUTION GUARANTEES:
-# - LOCAL-ONLY enforcement (strict .env.local validation)
+# - LOCAL-ONLY enforcement (strict .env validation)
 # - No fallback configs (fail-safe principle)
 # - Comprehensive logging with timestamps
 # - Zero silent failures
@@ -26,12 +26,12 @@ set -euo pipefail
 # [GOVERNANCE LAYER 1] Environment Enforcement
 ################################################################################
 
-ENV_FILE="${ENV_FILE:-.env}"
+ENV_FILE=".env"
 
 # Check env file existence (MANDATORY)
 if [[ ! -f "$ENV_FILE" ]]; then
     echo "FATAL: $ENV_FILE not found"
-    echo "Set ENV_FILE to an existing env file (e.g., .env or .env.local)."
+    echo "Create '.env' (see '.env.example' / '.env.schema')."
     exit 2
 fi
 
@@ -39,7 +39,7 @@ fi
 # [GOVERNANCE LAYER 2] Safe Environment Loading
 ################################################################################
 
-# Load .env.local with strict validation
+# Load .env with strict validation
 declare -A ENV_VARS=()
 
 while IFS= read -r line || [[ -n "$line" ]]; do
@@ -85,24 +85,24 @@ fi
 
 # Assertion 2: ADMIN_LOCAL_BYPASS must be true
 if [[ "$ADMIN_LOCAL_BYPASS" != "true" ]]; then
-    echo "FATAL GOVERNANCE VIOLATION: ADMIN_LOCAL_BYPASS must be 'true' in .env.local"
+    echo "FATAL GOVERNANCE VIOLATION: ADMIN_LOCAL_BYPASS must be 'true' in $ENV_FILE"
     echo "This script requires admin bypass for local testing"
     exit 4
 fi
 
 # Assertion 3: Security features must be disabled in local
 if [[ "$AUTH_ENABLED" != "false" ]]; then
-    echo "FATAL GOVERNANCE VIOLATION: AUTH_ENABLED must be 'false' in .env.local"
+    echo "FATAL GOVERNANCE VIOLATION: AUTH_ENABLED must be 'false' in $ENV_FILE"
     exit 5
 fi
 
 if [[ "$RBAC_ENABLED" != "false" ]]; then
-    echo "FATAL GOVERNANCE VIOLATION: RBAC_ENABLED must be 'false' in .env.local"
+    echo "FATAL GOVERNANCE VIOLATION: RBAC_ENABLED must be 'false' in $ENV_FILE"
     exit 6
 fi
 
 if [[ "$RLS_ENABLED" != "false" ]]; then
-    echo "FATAL GOVERNANCE VIOLATION: RLS_ENABLED must be 'false' in .env.local"
+    echo "FATAL GOVERNANCE VIOLATION: RLS_ENABLED must be 'false' in $ENV_FILE"
     exit 7
 fi
 
@@ -169,7 +169,11 @@ log_info() {
 ################################################################################
 
 TMP_DIR="$(mktemp -d)" || { echo "Failed to create temp dir"; exit 1; }
+MAIN_BASHPID="${BASHPID:-$$}"
 cleanup_temp() {
+    if [[ "${BASHPID:-$$}" != "$MAIN_BASHPID" ]]; then
+        return 0
+    fi
     [[ -d "$TMP_DIR" ]] && rm -rf "$TMP_DIR"
 }
 trap cleanup_temp EXIT
@@ -202,16 +206,29 @@ check_dependencies
 
 http_code() {
     local url="$1"
-    curl -s -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo "000"
+    local code
+    if ! code="$(curl -s -o /dev/null -w "%{http_code}" "$url" 2>/dev/null)"; then
+        echo "000"
+        return 0
+    fi
+    echo "$code"
 }
 
 http_code_with_header() {
     local method="$1" url="$2" header="$3"
+    local code
     if [[ -n "$header" ]]; then
-        curl -s -X "$method" -o /dev/null -w "%{http_code}" -H "$header" "$url" 2>/dev/null || echo "000"
+        if ! code="$(curl -s -X "$method" -o /dev/null -w "%{http_code}" -H "$header" "$url" 2>/dev/null)"; then
+            echo "000"
+            return 0
+        fi
     else
-        curl -s -X "$method" -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo "000"
+        if ! code="$(curl -s -X "$method" -o /dev/null -w "%{http_code}" "$url" 2>/dev/null)"; then
+            echo "000"
+            return 0
+        fi
     fi
+    echo "$code"
 }
 
 safe_fetch() {
@@ -411,7 +428,7 @@ log_section "PHASE 5: Mini Load Test (Concurrent Stability)"
 
 log_info "Firing $CONCURRENT_LOAD concurrent requests to health endpoint..."
 
-rm -f "$LOAD_FAILS"
+: > "$LOAD_FAILS"
 
 for i in $(seq 1 "$CONCURRENT_LOAD"); do
     (
@@ -423,7 +440,7 @@ for i in $(seq 1 "$CONCURRENT_LOAD"); do
 done
 wait || true
 
-FAIL_COUNT_LOAD="$(wc -l < "$LOAD_FAILS" 2>/dev/null || echo 0)"
+FAIL_COUNT_LOAD="$(wc -l < "$LOAD_FAILS")"
 
 if [[ "$FAIL_COUNT_LOAD" -eq 0 ]]; then
     log_pass "All $CONCURRENT_LOAD concurrent requests succeeded"
@@ -439,7 +456,7 @@ log_section "PHASE 6: Streaming Stability (E2E)"
 
 log_info "Testing $STREAM_CONCURRENT concurrent NDJSON streams..."
 
-rm -f "$STREAM_FAILS"
+: > "$STREAM_FAILS"
 
 for i in $(seq 1 "$STREAM_CONCURRENT"); do
     (
@@ -454,7 +471,7 @@ for i in $(seq 1 "$STREAM_CONCURRENT"); do
 done
 wait || true
 
-FAIL_COUNT_STREAM="$(wc -l < "$STREAM_FAILS" 2>/dev/null || echo 0)"
+FAIL_COUNT_STREAM="$(wc -l < "$STREAM_FAILS")"
 
 if [[ "$FAIL_COUNT_STREAM" -eq 0 ]]; then
     log_pass "All $STREAM_CONCURRENT streams returned valid NDJSON"
