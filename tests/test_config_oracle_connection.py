@@ -1,6 +1,6 @@
-import os
 import pytest
 
+pytest.importorskip("pydantic", reason="pydantic required for Settings tests")
 from app.core.config import Settings
 
 

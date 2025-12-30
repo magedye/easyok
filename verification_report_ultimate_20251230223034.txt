@@ -1,0 +1,13 @@
+=== EasyData Fortress Verification (Ultimate) ===
+Date: Tue Dec 30 07:30:34 PM UTC 2025
+Backend: http://localhost:8000
+Context: ENV=local | ADMIN_LOCAL_BYPASS=true
+=== 0) Authentication ===
+[WARN] Auth disabled or login failed (expected in local/demo)
+=== 1) Health & OpenAPI ===
+[FAIL] Health check failed (000000)
+[WARN] OpenAPI unusually small (0 bytes)
+=== 2) OpenAPI Contract Integrity ===
+[WARN] Schema 'QueryRequest' missing
+[WARN] Schema 'HealthResponse' missing
+[WARN] Schema 'ErrorModel' missing

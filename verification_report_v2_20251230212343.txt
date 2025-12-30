@@ -1,0 +1,31 @@
+=== EasyData Backend Verification Report (V2 - Advanced) ===
+Date: Tue Dec 30 06:23:43 PM UTC 2025
+Backend URL: http://localhost:8000
+Attempting to login to get real tokens...
+WARN: Authentication failed or not configured. Using placeholder token.
+
+1) Basic Health & Spec
+PASS: Health Check (200)
+PASS: OpenAPI Spec (200)
+
+2) Security Headers & CORS
+WARN: CORS headers missing (Check production settings)
+
+3) Input Validation (Negative Testing)
+PASS: System correctly rejected malformed JSON with 422
+PASS: Pydantic Validation active (Type mismatch rejected)
+
+4) Route Integrity
+PASS: Correctly returned 405 Method Not Allowed
+
+5) Mini-Load Test (Stability)
+Firing 10 concurrent requests to health endpoint...
+PASS: All 10 concurrent requests handled successfully.
+
+6) Governance & RBAC
+FAIL: Admin route exposed! Code: 200
+
+7) Streaming Logic Check
+PASS: Stream returned structured NDJSON events
+
+=== Advanced Verification Completed ===

@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+import os
 import sys
 import traceback
 import pytest
 
+if not os.environ.get("RUN_ORACLE_TESTS"):
+    pytest.skip("Oracle tests require RUN_ORACLE_TESTS=1 and driver", allow_module_level=True)
+
+oracledb = pytest.importorskip("oracledb", reason="Oracle driver required")
 from app.providers.database.oracle_provider import OracleProvider
 from app.core.config import get_settings
-
-try:
-    import oracledb
-except Exception as e:
-    print("[ERROR] Cannot import oracledb. Install using: pip install oracledb")
-    print("Details:", e)
-    sys.exit(1)
 
 # ============================================================
 #  ORACLE CONFIG — MATCHES main_v11.py

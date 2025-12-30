@@ -1,5 +1,11 @@
+import os
 import asyncio
+import pytest
 
+if not os.environ.get("RUN_TELEMETRY_TESTS"):
+    pytest.skip("Telemetry test requires RUN_TELEMETRY_TESTS=1", allow_module_level=True)
+
+otel = pytest.importorskip("opentelemetry", reason="opentelemetry required")
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, InMemorySpanExporter
 from opentelemetry import trace

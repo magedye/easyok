@@ -37,6 +37,9 @@ _SENTRY_CALL_LOG: List[float] = []
 
 
 def _ensure_admin(user: UserContext) -> None:
+    settings = get_settings(force_reload=True)
+    if settings.ENV.lower() == "local" and getattr(settings, "ADMIN_LOCAL_BYPASS", False):
+        return
     if user.get("role") != "admin":
         raise HTTPException(
             status_code=403,

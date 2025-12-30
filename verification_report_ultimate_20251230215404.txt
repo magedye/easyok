@@ -1,0 +1,6 @@
+=== EasyData Fortress Verification Report (Ultimate) ===
+Date: Tue Dec 30 06:54:04 PM UTC 2025
+Backend URL: http://localhost:8000
+Context: ENV=local, BYPASS=true
+
+--- Authentication ---

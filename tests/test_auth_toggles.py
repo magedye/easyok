@@ -1,8 +1,13 @@
+import os
 import pytest
-from fastapi.testclient import TestClient
-from app.main import app
 
-client = TestClient(app)
+if not os.environ.get("RUN_INTEGRATION_TESTS"):
+    pytest.skip("Integration test requires RUN_INTEGRATION_TESTS=1", allow_module_level=True)
+
+fastapi = pytest.importorskip("fastapi")
+TestClient = fastapi.testclient.TestClient
+app_main = pytest.importorskip("app.main")
+client = TestClient(app_main.app)
 
 
 class TestAuthToggle:

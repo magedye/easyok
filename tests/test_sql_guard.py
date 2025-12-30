@@ -1,7 +1,7 @@
 import types
-
 import pytest
 
+pytest.importorskip("sqlglot", reason="sqlglot required for SQLGuard tests")
 from app.utils.sql_guard import SQLGuard
 from app.core.config import get_settings
 from app.core.exceptions import InvalidQueryError

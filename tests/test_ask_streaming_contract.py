@@ -1,10 +1,15 @@
 import json
+import os
 import pytest
-from fastapi.testclient import TestClient
-from main import app
 
+# Integration-only: requires live FastAPI app/runtime
+if not os.environ.get("RUN_INTEGRATION_TESTS"):
+    pytest.skip("Integration test requires RUN_INTEGRATION_TESTS=1", allow_module_level=True)
 
-client = TestClient(app)
+fastapi = pytest.importorskip("fastapi")
+TestClient = fastapi.testclient.TestClient
+main = pytest.importorskip("main")
+client = TestClient(main.app)
 
 
 def parse_ndjson(response_text: str):

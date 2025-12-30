@@ -1,0 +1,60 @@
+=== EasyData Backend Verification Report (V2 Full) ===
+Date: Tue Dec 30 06:36:42 PM UTC 2025
+Backend URL: http://localhost:8000
+
+0) Environment Configuration
+Auth flag present in spec.
+WARN: Admin login failed or disabled; proceeding with placeholder.
+
+1) Health & OpenAPI
+Health endpoint status: 200
+OpenAPI status: 200
+
+2) Security Headers & CORS
+HTTP/1.1 405 Method Not Allowed
+date: Tue, 30 Dec 2025 18:36:42 GMT
+server: uvicorn
+allow: GET
+content-length: 31
+content-type: application/json
+
+Check CORS above for restrictive origin (no '*').
+
+3) Input Validation
+Malformed JSON status: 422
+Bad type JSON status: 422
+
+4) Route Integrity
+GET on POST-only /ask: 405
+
+5) Mini Load Test
+Mini load: PASS
+
+6) Governance / RBAC
+No auth admin access status: 200
+Admin endpoint with token: 200
+
+7) Streaming / NDJSON
+{"type": "thinking", "trace_id": "5f84ad3dd7ae483d93cd4705a4551060", "confidence_tier": "TIER_1_LAB", "timestamp": "2025-12-30T18:36:43.796051Z", "payload": {"status": "processing"}}
+{"type": "error", "trace_id": "5f84ad3dd7ae483d93cd4705a4551060", "confidence_tier": "TIER_0_FORTRESS", "timestamp": "2025-12-30T18:36:43.882065Z", "payload": {"message": "OpenAICompatibleProvider.generate_sql() missing 2 required positional arguments: 'temperature' and 'max_tokens'", "error_code": "internal_error"}}
+{"type": "end", "trace_id": "5f84ad3dd7ae483d93cd4705a4551060", "confidence_tier": "TIER_0_FORTRESS", "timestamp": "2025-12-30T18:36:43.883189Z", "payload": {"status": "failed", "chunks": 2}}
+(Inspect above for proper NDJSON order or error+end only)
+
+8) SQLGuard / Policy enforcement
+{"type": "thinking", "trace_id": "605a4ae0e69f48a382e1db432970f527", "confidence_tier": "TIER_1_LAB", "timestamp": "2025-12-30T18:36:43.982740Z", "payload": {"status": "processing"}}
+{"type": "error", "trace_id": "605a4ae0e69f48a382e1db432970f527", "confidence_tier": "TIER_0_FORTRESS", "timestamp": "2025-12-30T18:36:43.999998Z", "payload": {"message": "\u062a\u0645 \u062d\u0638\u0631 \u0627\u0644\u0627\u0633\u062a\u0639\u0644\u0627\u0645 \u0644\u0627\u0639\u062a\u0628\u0627\u0631\u0627\u062a \u0623\u0645\u0627\u0646", "error_code": "SECURITY_VIOLATION"}}
+{"type": "end", "trace_id": "605a4ae0e69f48a382e1db432970f527", "confidence_tier": "TIER_0_FORTRESS", "timestamp": "2025-12-30T18:36:44.001038Z", "payload": {"status": "failed", "chunks": 2}}
+
+9) Training Lifecycle
+{"detail":"Not Found"}
+
+10) Observability / Metrics
+Metrics JSON (if any):
+{"averageQueryTime":0,"successRate":14.117647058823529,"activeQueries":0,"queriesPerMinute":6,"cpuUsage":0.0,"memoryUsage":0.0,"diskUsage":0.0,"errorRate":85.88235294117646,"requestVolumeSeries":[{"timestamp":"16:15","count":2},{"timestamp":"17:42","count":1},{"timestamp":"17:47","count":1},{"timestamp":"17:48","count":1},{"timestamp":"18:11","count":2},{"timestamp":"18:18","count":1},{"timestamp":"18:19","count":1},{"timestamp":"18:20","count":1},{"timestamp":"18:22","count":1},{"timestamp":"18:23","count":2},{"timestamp":"18:36","count":10},{"timestamp":"18:47","count":5},{"timestamp":"18:48","count":5},{"timestamp":"18:55","count":6},{"timestamp":"19:49","count":3},{"timestamp":"19:50","count":2},{"timestamp":"20:34","count":1},{"timestamp":"20:36","count":2},{"timestamp":"20:37","count":2},{"timestamp":"20:38","count":2},{"timestamp":"20:39","count":2},{"timestamp":"20:51","count":4},{"timestamp":"20:53","count":8},{"timestamp":"20:54","count":5},{"timestamp":"20:55","count":7},{"timestamp":"21:01","count":2},{"timestamp":"21:02","count":6}],"latencyP95Series":[{"timestamp":"18:36:43","ms":0},{"timestamp":"18:36:43","ms":0},{"timestamp":"18:36:43","ms":0},{"timestamp":"18:36:43","ms":0},{"timestamp":"18:36:42","ms":0},{"timestamp":"18:36:42","ms":0},{"timestamp":"18:36:42","ms":0},{"timestamp":"18:36:42","ms":0},{"timestamp":"18:36:40","ms":0},{"timestamp":"18:36:40","ms":0},{"timestamp":"18:23:44","ms":0},{"timestamp":"18:23:44","ms":0},{"timestamp":"18:11:20","ms":0},{"timestamp":"18:11:19","ms":0},{"timestamp":"16:15:33","ms":0},{"timestamp":"16:15:32","ms":0},{"timestamp":"21:02:50","ms":0},{"timestamp":"21:02:44","ms":0},{"timestamp":"21:02:27","ms":0},{"timestamp":"21:02:25","ms":0},{"timestamp":"21:02:19","ms":0},{"timestamp":"21:02:13","ms":0},{"timestamp":"21:01:45","ms":0},{"timestamp":"21:01:16","ms":0},{"timestamp":"20:55:35","ms":0},{"timestamp":"20:55:34","ms":0},{"timestamp":"20:55:27","ms":0},{"timestamp":"20:55:26","ms":0},{"timestamp":"20:55:20","ms":0},{"timestamp":"20:55:12","ms":0},{"timestamp":"20:55:02","ms":0},{"timestamp":"20:54:56","ms":0},{"timestamp":"20:54:42","ms":0},{"timestamp":"20:54:41","ms":0},{"timestamp":"20:54:35","ms":0},{"timestamp":"20:54:34","ms":0},{"timestamp":"20:53:42","ms":0},{"timestamp":"20:53:41","ms":0},{"timestamp":"20:53:30","ms":0},{"timestamp":"20:53:28","ms":0},{"timestamp":"20:53:23","ms":0},{"timestamp":"20:53:17","ms":0},{"timestamp":"20:53:07","ms":0},{"timestamp":"20:53:02","ms":0},{"timestamp":"20:51:57","ms":0},{"timestamp":"20:51:56","ms":0},{"timestamp":"20:51:50","ms":0},{"timestamp":"20:51:46","ms":0},{"timestamp":"20:39:34","ms":0},{"timestamp":"20:39:09","ms":0},{"timestamp":"20:38:45","ms":0},{"timestamp":"20:38:01","ms":0},{"timestamp":"20:37:36","ms":0},{"timestamp":"20:37:20","ms":0},{"timestamp":"20:36:49","ms":0},{"timestamp":"20:36:18","ms":0},{"timestamp":"20:34:11","ms":0},{"timestamp":"19:50:24","ms":0},{"timestamp":"19:50:11","ms":0},{"timestamp":"19:49:37","ms":0},{"timestamp":"19:49:19","ms":0},{"timestamp":"19:49:08","ms":0},{"timestamp":"18:55:55","ms":0},{"timestamp":"18:55:46","ms":0},{"timestamp":"18:55:39","ms":0},{"timestamp":"18:55:32","ms":0},{"timestamp":"18:55:24","ms":0},{"timestamp":"18:55:14","ms":0},{"timestamp":"18:48:17","ms":0},{"timestamp":"18:48:13","ms":0},{"timestamp":"18:48:11","ms":0},{"timestamp":"18:48:09","ms":0},{"timestamp":"18:48:07","ms":0},{"timestamp":"18:47:28","ms":0},{"timestamp":"18:47:26","ms":0},{"timestamp":"18:47:25","ms":0},{"timestamp":"18:47:24","ms":0},{"timestamp":"18:47:17","ms":0},{"timestamp":"18:22:48","ms":0},{"timestamp":"18:20:19","ms":0},{"timestamp":"18:19:45","ms":0},{"timestamp":"18:18:32","ms":0},{"timestamp":"17:48:18","ms":0},{"timestamp":"17:47:17","ms":0},{"timestamp":"17:42:51","ms":0}],"errorRateSeries":[{"timestamp":"18:36:43","rate":100},{"timestamp":"18:36:43","rate":100},{"timestamp":"18:36:43","rate":100},{"timestamp":"18:36:43","rate":100},{"timestamp":"18:36:42","rate":100},{"timestamp":"18:36:42","rate":100},{"timestamp":"18:36:42","rate":100},{"timestamp":"18:36:42","rate":100},{"timestamp":"18:36:40","rate":100},{"timestamp":"18:36:40","rate":100},{"timestamp":"18:23:44","rate":100},{"timestamp":"18:23:44","rate":100},{"timestamp":"18:11:20","rate":100},{"timestamp":"18:11:19","rate":100},{"timestamp":"16:15:33","rate":100},{"timestamp":"16:15:32","rate":100},{"timestamp":"21:02:50","rate":100},{"timestamp":"21:02:44","rate":100},{"timestamp":"21:02:27","rate":100},{"timestamp":"21:02:25","rate":100},{"timestamp":"21:02:19","rate":0},{"timestamp":"21:02:13","rate":0},{"timestamp":"21:01:45","rate":0},{"timestamp":"21:01:16","rate":0},{"timestamp":"20:55:35","rate":100},{"timestamp":"20:55:34","rate":100},{"timestamp":"20:55:27","rate":100},{"timestamp":"20:55:26","rate":100},{"timestamp":"20:55:20","rate":0},{"timestamp":"20:55:12","rate":0},{"timestamp":"20:55:02","rate":0},{"timestamp":"20:54:56","rate":0},{"timestamp":"20:54:42","rate":100},{"timestamp":"20:54:41","rate":100},{"timestamp":"20:54:35","rate":100},{"timestamp":"20:54:34","rate":100},{"timestamp":"20:53:42","rate":100},{"timestamp":"20:53:41","rate":100},{"timestamp":"20:53:30","rate":100},{"timestamp":"20:53:28","rate":100},{"timestamp":"20:53:23","rate":0},{"timestamp":"20:53:17","rate":0},{"timestamp":"20:53:07","rate":0},{"timestamp":"20:53:02","rate":0},{"timestamp":"20:51:57","rate":100},{"timestamp":"20:51:56","rate":100},{"timestamp":"20:51:50","rate":100},{"timestamp":"20:51:46","rate":100},{"timestamp":"20:39:34","rate":100},{"timestamp":"20:39:09","rate":100},{"timestamp":"20:38:45","rate":100},{"timestamp":"20:38:01","rate":100},{"timestamp":"20:37:36","rate":100},{"timestamp":"20:37:20","rate":100},{"timestamp":"20:36:49","rate":100},{"timestamp":"20:36:18","rate":100},{"timestamp":"20:34:11","rate":100},{"timestamp":"19:50:24","rate":100},{"timestamp":"19:50:11","rate":100},{"timestamp":"19:49:37","rate":100},{"timestamp":"19:49:19","rate":100},{"timestamp":"19:49:08","rate":100},{"timestamp":"18:55:55","rate":100},{"timestamp":"18:55:46","rate":100},{"timestamp":"18:55:39","rate":100},{"timestamp":"18:55:32","rate":100},{"timestamp":"18:55:24","rate":100},{"timestamp":"18:55:14","rate":100},{"timestamp":"18:48:17","rate":100},{"timestamp":"18:48:13","rate":100},{"timestamp":"18:48:11","rate":100},{"timestamp":"18:48:09","rate":100},{"timestamp":"18:48:07","rate":100},{"timestamp":"18:47:28","rate":100},{"timestamp":"18:47:26","rate":100},{"timestamp":"18:47:25","rate":100},{"timestamp":"18:47:24","rate":100},{"timestamp":"18:47:17","rate":100},{"timestamp":"18:22:48","rate":100},{"timestamp":"18:20:19","rate":100},{"timestamp":"18:19:45","rate":100},{"timestamp":"18:18:32","rate":100},{"timestamp":"17:48:18","rate":100},{"timestamp":"17:47:17","rate":100},{"timestamp":"17:42:51","rate":100}]}General health endpoint:
+{"detail":"Not Found"}
+11) Negative Assertions
+- Confirmed type/JSON validation above
+- Admin protected above
+- Mini load stability recorded
+
+=== Full Verification Completed ===

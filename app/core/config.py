@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     APP_NAME: str = "EasyData"
     APP_VERSION: str = "16.0.0"
     APP_ENV: Literal["development", "staging", "production"] = "development"
+    ENV: str = "development"  # used for local bypass checks only
+    ENV: str = "development"  # used for local bypass checks only
     DEBUG: bool = False
 
     # =========================================================================
@@ -60,6 +62,8 @@ class Settings(BaseSettings):
     ADMIN_FEATURE_TOGGLE_API_ENABLED: bool = True
     ADMIN_FEATURE_TOGGLE_REQUIRE_REASON: bool = True
     ADMIN_FEATURE_TOGGLE_EMIT_OTEL: bool = True
+    ADMIN_LOCAL_BYPASS: bool = False
+    ADMIN_LOCAL_BYPASS: bool = False
     # CORS configuration to allow frontend origin
     CORS_ORIGINS: list = ['http://localhost:3000']  # Assuming frontend runs at localhost:3000
     BACKEND_PORT: int = 8000  # Ensuring backend runs on port 8000

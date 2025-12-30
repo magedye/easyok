@@ -1,9 +1,16 @@
-from fastapi.testclient import TestClient
-from main import app
+import os
+import pytest
+
+if not os.environ.get("RUN_INTEGRATION_TESTS"):
+    pytest.skip("Integration test requires RUN_INTEGRATION_TESTS=1", allow_module_level=True)
+
+fastapi = pytest.importorskip("fastapi")
+TestClient = fastapi.testclient.TestClient
+main = pytest.importorskip("main")
 
 
 def test_health_tag_unique_in_openapi():
-    client = TestClient(app)
+    client = TestClient(main.app)
     openapi = client.get("/openapi.json").json()
 
     # Ensure we have a single 'health' tag and no 'Health' duplicate

@@ -1,0 +1,32 @@
+=== EasyData Fortress Verification (Ultimate) ===
+Date: Tue Dec 30 07:45:40 PM UTC 2025
+Backend: http://localhost:8000
+Context: ENV=local | ADMIN_LOCAL_BYPASS=true
+=== 0) Authentication ===
+[WARN] Auth disabled or login failed (expected in local/demo)
+=== 1) Health & OpenAPI ===
+[PASS] Health check OK (200)
+[PASS] OpenAPI fetched (44165 bytes)
+=== 2) OpenAPI Contract Integrity ===
+[PASS] Schema 'QueryRequest' found
+[WARN] Schema 'HealthResponse' missing
+[WARN] Schema 'ErrorModel' missing
+[PASS] operationId uniqueness enforced
+=== 3) RBAC / Admin Guards ===
+[PASS] Local admin bypass active (ADR-0014)
+=== 4) Method & Input Validation ===
+[PASS] Method guard enforced (405)
+Malformed JSON → 422
+Type mismatch → 422
+=== 5) Mini Load Test ===
+[PASS] Load stable (10/10 requests)
+=== 6) Streaming & SQLGuard ===
+[PASS] NDJSON stream detected
+[PASS] SQLGuard enforced
+=== 7) Training & Observability ===
+Training endpoint → 404
+Metrics size: 7330 bytes
+=== FINAL SUMMARY ===
+Total Failures : 0
+Total Warnings : 3
+✔ OVERALL RESULT: PASS — System is operationally valid

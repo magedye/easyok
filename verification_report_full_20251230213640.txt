@@ -1,0 +1,124 @@
+=== EasyData v16.7.9 Backend Full Verification Report ===
+Date: Tue Dec 30 06:36:40 PM UTC 2025
+Backend: http://localhost:8000
+
+--- Authentication ---
+WARN: Admin login failed; will run protected endpoint checks with placeholder token
+
+1) Health & OpenAPI
+200OpenAPI JSON saved; size=44165
+
+2) OpenAPI Contract Integrity
+PASS: Schema 'QueryRequest' found
+WARN: Schema 'HealthResponse' not found
+WARN: Schema 'ErrorModel' not found
+PASS: No duplicate operationIds
+
+3) RBAC Enforcement
+No auth admin GET status: 200
+FAIL: Admin route accessible without auth
+Admin route with token status: 200
+
+4) Method Integrity
+PUT /ask status: 405
+
+5) Input Validation
+Malformed JSON status: 422
+Type mismatch status: 422
+
+6) Streaming Contract (/ask)
+{"type": "thinking", "trace_id": "4f18025067f54341b00419883f67b8df", "confidence_tier": "TIER_1_LAB", "timestamp": "2025-12-30T18:36:42.078424Z", "payload": {"status": "processing"}}
+{"type": "error", "trace_id": "4f18025067f54341b00419883f67b8df", "confidence_tier": "TIER_0_FORTRESS", "timestamp": "2025-12-30T18:36:42.346183Z", "payload": {"message": "OpenAICompatibleProvider.generate_sql() missing 2 required positional arguments: 'temperature' and 'max_tokens'", "error_code": "internal_error"}}
+{"type": "end", "trace_id": "4f18025067f54341b00419883f67b8df", "confidence_tier": "TIER_0_FORTRESS", "timestamp": "2025-12-30T18:36:42.347452Z", "payload": {"status": "failed", "chunks": 2}}
+
+7) SQLGuard Enforcement
+{"type": "thinking", "trace_id": "15e2c0cd90094eda9a39da143cc67ce5", "confidence_tier": "TIER_1_LAB", "timestamp": "2025-12-30T18:36:42.504066Z", "payload": {"status": "processing"}}
+{"type": "error", "trace_id": "15e2c0cd90094eda9a39da143cc67ce5", "confidence_tier": "TIER_0_FORTRESS", "timestamp": "2025-12-30T18:36:42.528926Z", "payload": {"message": "\u062a\u0645 \u062d\u0638\u0631 \u0627\u0644\u0627\u0633\u062a\u0639\u0644\u0627\u0645 \u0644\u0627\u0639\u062a\u0628\u0627\u0631\u0627\u062a \u0623\u0645\u0627\u0646", "error_code": "SECURITY_VIOLATION"}}
+{"type": "end", "trace_id": "15e2c0cd90094eda9a39da143cc67ce5", "confidence_tier": "TIER_0_FORTRESS", "timestamp": "2025-12-30T18:36:42.530359Z", "payload": {"status": "failed", "chunks": 2}}
+
+8) Runtime vs Spec Route Audit
+Spec routes:
+/api/v1/admin/analytics/rag-quality
+/api/v1/admin/api-catalog
+/api/v1/admin/api-catalog/connections
+/api/v1/admin/api-catalog/connections/{connection_id}
+/api/v1/admin/api-catalog/connections/{connection_id}/test
+/api/v1/admin/api-catalog/endpoints
+/api/v1/admin/api-catalog/endpoints/{endpoint_id}
+/api/v1/admin/api-catalog/validate
+/api/v1/admin/api-catalog/versions
+/api/v1/admin/api-catalog/versions/{version_id}
+/api/v1/admin/api-catalog/versions/{version_id}/preview
+/api/v1/admin/api-catalog/versions/{version_id}/publish
+/api/v1/admin/audit
+/api/v1/admin/dashboard
+/api/v1/admin/health
+/api/v1/admin/metrics
+/api/v1/admin/observability/status
+/api/v1/admin/run_sql_csv
+/api/v1/admin/sandbox/execute
+/api/v1/admin/sandbox/promote
+/api/v1/admin/schema
+/api/v1/admin/schema-policy
+/api/v1/admin/schema/drift
+/api/v1/admin/schema/drift/retrain
+/api/v1/admin/schema/refresh
+/api/v1/admin/settings/feature-toggle
+/api/v1/admin/settings/feature-toggles
+/api/v1/admin/settings/sentry-issues
+/api/v1/admin/telemetry
+/api/v1/admin/training/approve
+/api/v1/admin/training/approve/{staging_id}
+/api/v1/admin/training/pending
+/api/v1/admin/training/reject/{staging_id}
+/api/v1/analytics/behavioral
+/api/v1/analytics/user
+/api/v1/ask
+/api/v1/assets/queries
+/api/v1/assets/queries/{asset_id}
+/api/v1/auth/login
+/api/v1/auth/logout
+/api/v1/auth/me
+/api/v1/auth/status
+/api/v1/auth/validate
+/api/v1/chat/stream
+/api/v1/feedback
+/api/v1/feedback/pending
+/api/v1/feedback/{feedback_id}
+/api/v1/health
+/api/v1/health/llm
+/api/v1/schema/connections
+/api/v1/schema/connections/{connection_id}
+/api/v1/schema/connections/{connection_id}/test
+/api/v1/schema/discover
+/api/v1/schema/policy/commit
+/api/v1/schema/policy/draft
+/api/v1/schema/policy/wizard/commit
+/api/v1/schema/policy/wizard/preview
+/api/v1/schema/policy/{policy_id}
+/api/v1/schema/policy/{policy_id}/activate
+/api/v1/schema/{connection_id}/inspect
+/api/v1/schema/{connection_id}/tables
+/api/v1/schema/{connection_id}/tables/{table}/columns
+/api/v1/schema/{connection_id}/tables/{table}/sample
+/api/v1/train/assumptions
+/api/v1/train/assumptions/approve
+/api/v1/train/assumptions/reject
+/api/v1/training/approve/{item_id}
+/api/v1/training/ddl
+/api/v1/training/history
+/api/v1/training/manual
+/api/v1/training/pending
+/api/v1/training/purge
+/api/v1/training/reject/{item_id}
+/api/v1/training/rollback
+/metrics/json
+Normalized spec count: 75
+
+9) Training Admin Endpoints
+{"detail":"Not Found"}
+
+10) Observability Endpoints
+Metrics JSON:
+{"averageQueryTime":0,"successRate":14.814814814814813,"activeQueries":0,"queriesPerMinute":6,"cpuUsage":0.0,"memoryUsage":0.0,"diskUsage":0.0,"errorRate":85.18518518518519,"requestVolumeSeries":[{"timestamp":"16:15","count":2},{"timestamp":"17:42","count":1},{"timestamp":"17:47","count":1},{"timestamp":"17:48","count":1},{"timestamp":"18:11","count":2},{"timestamp":"18:18","count":1},{"timestamp":"18:19","count":1},{"timestamp":"18:20","count":1},{"timestamp":"18:22","count":1},{"timestamp":"18:23","count":2},{"timestamp":"18:36","count":6},{"timestamp":"18:47","count":5},{"timestamp":"18:48","count":5},{"timestamp":"18:55","count":6},{"timestamp":"19:49","count":3},{"timestamp":"19:50","count":2},{"timestamp":"20:34","count":1},{"timestamp":"20:36","count":2},{"timestamp":"20:37","count":2},{"timestamp":"20:38","count":2},{"timestamp":"20:39","count":2},{"timestamp":"20:51","count":4},{"timestamp":"20:53","count":8},{"timestamp":"20:54","count":5},{"timestamp":"20:55","count":7},{"timestamp":"21:01","count":2},{"timestamp":"21:02","count":6}],"latencyP95Series":[{"timestamp":"18:36:42","ms":0},{"timestamp":"18:36:42","ms":0},{"timestamp":"18:36:42","ms":0},{"timestamp":"18:36:42","ms":0},{"timestamp":"18:36:40","ms":0},{"timestamp":"18:36:40","ms":0},{"timestamp":"18:23:44","ms":0},{"timestamp":"18:23:44","ms":0},{"timestamp":"18:11:20","ms":0},{"timestamp":"18:11:19","ms":0},{"timestamp":"16:15:33","ms":0},{"timestamp":"16:15:32","ms":0},{"timestamp":"21:02:50","ms":0},{"timestamp":"21:02:44","ms":0},{"timestamp":"21:02:27","ms":0},{"timestamp":"21:02:25","ms":0},{"timestamp":"21:02:19","ms":0},{"timestamp":"21:02:13","ms":0},{"timestamp":"21:01:45","ms":0},{"timestamp":"21:01:16","ms":0},{"timestamp":"20:55:35","ms":0},{"timestamp":"20:55:34","ms":0},{"timestamp":"20:55:27","ms":0},{"timestamp":"20:55:26","ms":0},{"timestamp":"20:55:20","ms":0},{"timestamp":"20:55:12","ms":0},{"timestamp":"20:55:02","ms":0},{"timestamp":"20:54:56","ms":0},{"timestamp":"20:54:42","ms":0},{"timestamp":"20:54:41","ms":0},{"timestamp":"20:54:35","ms":0},{"timestamp":"20:54:34","ms":0},{"timestamp":"20:53:42","ms":0},{"timestamp":"20:53:41","ms":0},{"timestamp":"20:53:30","ms":0},{"timestamp":"20:53:28","ms":0},{"timestamp":"20:53:23","ms":0},{"timestamp":"20:53:17","ms":0},{"timestamp":"20:53:07","ms":0},{"timestamp":"20:53:02","ms":0},{"timestamp":"20:51:57","ms":0},{"timestamp":"20:51:56","ms":0},{"timestamp":"20:51:50","ms":0},{"timestamp":"20:51:46","ms":0},{"timestamp":"20:39:34","ms":0},{"timestamp":"20:39:09","ms":0},{"timestamp":"20:38:45","ms":0},{"timestamp":"20:38:01","ms":0},{"timestamp":"20:37:36","ms":0},{"timestamp":"20:37:20","ms":0},{"timestamp":"20:36:49","ms":0},{"timestamp":"20:36:18","ms":0},{"timestamp":"20:34:11","ms":0},{"timestamp":"19:50:24","ms":0},{"timestamp":"19:50:11","ms":0},{"timestamp":"19:49:37","ms":0},{"timestamp":"19:49:19","ms":0},{"timestamp":"19:49:08","ms":0},{"timestamp":"18:55:55","ms":0},{"timestamp":"18:55:46","ms":0},{"timestamp":"18:55:39","ms":0},{"timestamp":"18:55:32","ms":0},{"timestamp":"18:55:24","ms":0},{"timestamp":"18:55:14","ms":0},{"timestamp":"18:48:17","ms":0},{"timestamp":"18:48:13","ms":0},{"timestamp":"18:48:11","ms":0},{"timestamp":"18:48:09","ms":0},{"timestamp":"18:48:07","ms":0},{"timestamp":"18:47:28","ms":0},{"timestamp":"18:47:26","ms":0},{"timestamp":"18:47:25","ms":0},{"timestamp":"18:47:24","ms":0},{"timestamp":"18:47:17","ms":0},{"timestamp":"18:22:48","ms":0},{"timestamp":"18:20:19","ms":0},{"timestamp":"18:19:45","ms":0},{"timestamp":"18:18:32","ms":0},{"timestamp":"17:48:18","ms":0},{"timestamp":"17:47:17","ms":0},{"timestamp":"17:42:51","ms":0}],"errorRateSeries":[{"timestamp":"18:36:42","rate":100},{"timestamp":"18:36:42","rate":100},{"timestamp":"18:36:42","rate":100},{"timestamp":"18:36:42","rate":100},{"timestamp":"18:36:40","rate":100},{"timestamp":"18:36:40","rate":100},{"timestamp":"18:23:44","rate":100},{"timestamp":"18:23:44","rate":100},{"timestamp":"18:11:20","rate":100},{"timestamp":"18:11:19","rate":100},{"timestamp":"16:15:33","rate":100},{"timestamp":"16:15:32","rate":100},{"timestamp":"21:02:50","rate":100},{"timestamp":"21:02:44","rate":100},{"timestamp":"21:02:27","rate":100},{"timestamp":"21:02:25","rate":100},{"timestamp":"21:02:19","rate":0},{"timestamp":"21:02:13","rate":0},{"timestamp":"21:01:45","rate":0},{"timestamp":"21:01:16","rate":0},{"timestamp":"20:55:35","rate":100},{"timestamp":"20:55:34","rate":100},{"timestamp":"20:55:27","rate":100},{"timestamp":"20:55:26","rate":100},{"timestamp":"20:55:20","rate":0},{"timestamp":"20:55:12","rate":0},{"timestamp":"20:55:02","rate":0},{"timestamp":"20:54:56","rate":0},{"timestamp":"20:54:42","rate":100},{"timestamp":"20:54:41","rate":100},{"timestamp":"20:54:35","rate":100},{"timestamp":"20:54:34","rate":100},{"timestamp":"20:53:42","rate":100},{"timestamp":"20:53:41","rate":100},{"timestamp":"20:53:30","rate":100},{"timestamp":"20:53:28","rate":100},{"timestamp":"20:53:23","rate":0},{"timestamp":"20:53:17","rate":0},{"timestamp":"20:53:07","rate":0},{"timestamp":"20:53:02","rate":0},{"timestamp":"20:51:57","rate":100},{"timestamp":"20:51:56","rate":100},{"timestamp":"20:51:50","rate":100},{"timestamp":"20:51:46","rate":100},{"timestamp":"20:39:34","rate":100},{"timestamp":"20:39:09","rate":100},{"timestamp":"20:38:45","rate":100},{"timestamp":"20:38:01","rate":100},{"timestamp":"20:37:36","rate":100},{"timestamp":"20:37:20","rate":100},{"timestamp":"20:36:49","rate":100},{"timestamp":"20:36:18","rate":100},{"timestamp":"20:34:11","rate":100},{"timestamp":"19:50:24","rate":100},{"timestamp":"19:50:11","rate":100},{"timestamp":"19:49:37","rate":100},{"timestamp":"19:49:19","rate":100},{"timestamp":"19:49:08","rate":100},{"timestamp":"18:55:55","rate":100},{"timestamp":"18:55:46","rate":100},{"timestamp":"18:55:39","rate":100},{"timestamp":"18:55:32","rate":100},{"timestamp":"18:55:24","rate":100},{"timestamp":"18:55:14","rate":100},{"timestamp":"18:48:17","rate":100},{"timestamp":"18:48:13","rate":100},{"timestamp":"18:48:11","rate":100},{"timestamp":"18:48:09","rate":100},{"timestamp":"18:48:07","rate":100},{"timestamp":"18:47:28","rate":100},{"timestamp":"18:47:26","rate":100},{"timestamp":"18:47:25","rate":100},{"timestamp":"18:47:24","rate":100},{"timestamp":"18:47:17","rate":100},{"timestamp":"18:22:48","rate":100},{"timestamp":"18:20:19","rate":100},{"timestamp":"18:19:45","rate":100},{"timestamp":"18:18:32","rate":100},{"timestamp":"17:48:18","rate":100},{"timestamp":"17:47:17","rate":100},{"timestamp":"17:42:51","rate":100}]}
+=== Enhanced Full Verification Completed ===
