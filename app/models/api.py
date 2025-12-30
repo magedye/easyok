@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Literal
 from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -46,37 +46,37 @@ class BaseChunk(BaseModel):
 
 
 class ThinkingChunk(BaseChunk):
-    type: str = Field("thinking", const=True)
+    type: Literal["thinking"] = "thinking"
     status: str
 
 
 class TechnicalViewChunk(BaseChunk):
-    type: str = Field("technical_view", const=True)
+    type: Literal["technical_view"] = "technical_view"
     sql: str
     assumptions: List[str] = []
     policy_hash: str
 
 
 class DataChunk(BaseChunk):
-    type: str = Field("data_chunk", const=True)
+    type: Literal["data_chunk"] = "data_chunk"
     columns: List[str]
     rows: List[List[Any]]
     row_count: int
 
 
 class BusinessViewChunk(BaseChunk):
-    type: str = Field("business_view", const=True)
+    type: Literal["business_view"] = "business_view"
     summary: str
     chart_config: Dict[str, Any]
 
 
 class EndChunk(BaseChunk):
-    type: str = Field("end", const=True)
+    type: Literal["end"] = "end"
     duration_ms: int
 
 
 class ErrorChunk(BaseChunk):
-    type: str = Field("error", const=True)
+    type: Literal["error"] = "error"
     error_code: str
     message: str
 

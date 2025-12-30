@@ -1,0 +1,66 @@
+# ============================================================================
+# Core framework
+# ============================================================================
+fastapi
+uvicorn[standard]
+pydantic>=2.0
+pydantic-settings
+
+# ============================================================================
+# Database / ORM
+# ============================================================================
+sqlalchemy>=2.0
+oracledb>=2.0       # Keeps compatibility with your OracleProvider logic
+chromadb>=0.4.0      # Vector store client used for DDL ingestion (scripts)
+pyodbc>=5.0
+pydantic-settings
+sqlparse
+asyncpg
+# ============================================================================
+# AI Core & LLM Clients (Explicit is better than implicit)
+# ============================================================================
+vanna==2.0.1
+openai>=1.0.0       # Required for Phi3Provider & OpenAIProvider
+groq>=0.5.0         # Required for GroqProvider
+# google-generativeai # Uncomment if using GoogleProvider implementation
+
+# ============================================================================
+# Vector store clients
+# ============================================================================
+chromadb>=0.4.0,<0.6.0  # Stick to stable versions
+qdrant-client>=1.7.0
+
+# ============================================================================
+# Security (Matching app/core/security.py)
+# ============================================================================
+# Using python-jose because code imports 'jose'
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]     # Often needed for password hashing if you add user management
+
+# ============================================================================
+# Utilities
+# ============================================================================
+python-dotenv
+ujson
+structlog
+prometheus-client
+sqlparse
+sqlglot
+ragas
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp
+opentelemetry-instrumentation-fastapi
+redis
+camel-tools
+farasapy
+httpx
+
+# ============================================================================
+# Testing / Quality
+# ============================================================================
+pytest
+mypy
+black
+ruff
+httpx               # Required for TestClient

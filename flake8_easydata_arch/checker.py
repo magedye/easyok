@@ -25,6 +25,21 @@ DB_PROVIDER_PATHS = (
     "app/providers/mssql",
     "app/providers/sqlalchemy",
 )
+# ADR-0021 governed exception list (API -> Service coupling)
+# DO NOT EXTEND without a new ADR.
+EDA901_ALLOWED_FILES = {
+    "app/api/v1/admin.py",
+    "app/api/v1/admin/sandbox.py",
+    "app/api/v1/admin/settings.py",
+    "app/api/v1/admin/training.py",
+    "app/api/v1/assets.py",
+    "app/api/v1/chat.py",
+    "app/api/v1/query.py",
+    "app/api/v1/rag_quality.py",
+    "app/api/v1/schema.py",
+    "app/api/v1/training.py",
+    "app/services/orchestration_service.py",
+}
 
 ERRORS = {
     "EDA901": "Core layer must not import Isolated modules: {module}",
@@ -56,7 +71,9 @@ class EasyDataArchChecker:
 
                 # EDA901: Core -> Isolated
                 if self._is_core() and self._is_isolated(module):
-                    yield self._err(node, "EDA901", module)
+                    err = self._err(node, "EDA901", module)
+                    if not self._is_eda901_allowed():
+                        yield err
 
                 # EDA902: Isolated -> API
                 if self._is_isolated() and self._is_api(module):
@@ -112,6 +129,10 @@ class EasyDataArchChecker:
             if normalized.startswith(path) or normalized.startswith(target):
                 return True
         return False
+
+    def _is_eda901_allowed(self) -> bool:
+        """Check governed exception list for EDA901."""
+        return self.filename in EDA901_ALLOWED_FILES
 
     def _is_services(self) -> bool:
         """Check if current file is in Services layer."""

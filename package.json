@@ -1,0 +1,18 @@
+{
+  "name": "easyok-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "typescript": "^4.9.5"
+  },
+  "scripts": {
+    "start:test": "bash ./scripts/start-test-app.sh",
+    "stop:test": "bash ./scripts/stop-test-app.sh",
+    "test": "playwright test",
+    "test:ci": "npm run start:test && (BASE_URL=$(cat ./start-test-app.baseurl) npx playwright test --project=\"Desktop Chromium\" || true) && npm run stop:test || true",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report",
+    "prepare": "npx playwright install --with-deps"
+  }
+}

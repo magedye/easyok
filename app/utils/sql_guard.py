@@ -34,7 +34,7 @@ class SQLGuard:
         self.dialect = "oracle"
         self.forbidden_expressions = {
             exp.Drop,
-            exp.Truncate,
+            exp.TruncateTable,
             exp.Delete,
             exp.Update,
             exp.Insert,

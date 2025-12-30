@@ -36,6 +36,8 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+**Local-only override:** set `EASYDATA_ALLOW_LOCAL_NO_SCHEMA_POLICY=true` (with `APP_ENV=local`) to bypass Training Readiness Guard only in local runs; never use outside local.
+
 ## Frontend
 
 Frontend uses Vite.
@@ -48,4 +50,3 @@ VITE_API_BASE_URL=http://localhost:8000 npm --prefix frontend run dev
 ## Why this is required
 
 Modern Linux distributions enforce **PEP 668** which prevents running `pip install` against the **system Python**. Using `./.venv/` keeps dependencies isolated and avoids breaking OS-managed Python packages.
-

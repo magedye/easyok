@@ -33,6 +33,7 @@ RUNTIME_TOGGLES: Set[str] = {
     "ENABLE_GZIP_COMPRESSION",      # Network optimization
     "ENABLE_ARABIC_NLP",            # Language feature
     "ENABLE_RAGAS_EVALUATION",      # Quality evaluation
+    "ENABLE_RAG_QUALITY",           # RAG quality feature flag (lazy, optional)
     "ENABLE_SIGNOZ_ALERTS",         # Observability alerts
     "SENTRY_DSN",                   # Error tracking
 }

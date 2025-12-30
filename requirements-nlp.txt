@@ -1,0 +1,4 @@
+camel-tools
+farasapy
+torch
+ragas==0.3.1

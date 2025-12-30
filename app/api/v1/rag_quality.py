@@ -4,10 +4,17 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import require_permission, UserContext
-from app.services.ragas_service import RagasService
+from app.core.config import get_settings
+from app.core.exceptions import AppException
 
 router = APIRouter(prefix="/admin/analytics", tags=["analytics"])
-ragas_service = RagasService()
+
+
+def rag_quality_guard():
+    settings = get_settings()
+    if not getattr(settings, "ENABLE_RAG_QUALITY", False):
+        raise AppException("RAG Quality endpoint is disabled")
+    return settings
 
 
 @router.get("/rag-quality")
@@ -18,11 +25,15 @@ async def rag_quality(
     schema_version: Optional[str] = Query(default=None),
     policy_version: Optional[int] = Query(default=None),
     user: UserContext = Depends(require_permission("admin:view")),
+    settings=Depends(rag_quality_guard),
 ):
+    from app.services.ragas_service import RagasService
+
     def parse_dt(val: Optional[str]) -> Optional[datetime]:
         return datetime.fromisoformat(val) if val else None
 
-    return ragas_service.aggregate(
+    service = RagasService()
+    return service.aggregate(
         start=parse_dt(start),
         end=parse_dt(end),
         model_name=model,

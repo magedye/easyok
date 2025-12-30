@@ -46,8 +46,11 @@ async def record_event(
     return {"status": "accepted"}
 
 
-@router.get("", status_code=status.HTTP_200_OK)
-@Depends(require_permission("admin:read"))
+@router.get(
+    "",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_permission("admin:read"))],
+)
 async def list_events():
     """
     Admin-only read of behavioral events (analytics only).

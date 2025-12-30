@@ -1,14 +1,6 @@
-"""
-OpenAI‑compatible LLM provider stub.
-
-This provider wraps services that conform to the OpenAI API (e.g.
-Groq, together.ai).  Implementation will require setting an API
-endpoint and key.  For now it behaves like the standard OpenAI
-provider but with a configurable base URL.
-"""
-
-from typing import Dict, List
 from dataclasses import dataclass
+from typing import Dict, List
+
 import openai  # type: ignore
 
 from app.core.config import Settings
@@ -18,21 +10,22 @@ from ..base import BaseLLMProvider
 
 @dataclass
 class OpenAICompatibleProvider(BaseLLMProvider):
+    """LLM provider for OpenAI-compatible HTTP endpoints (e.g., Groq)."""
+
     settings: Settings
 
     def __post_init__(self) -> None:
         if not self.settings.OPENAI_API_KEY:
-            raise AppException("OpenAI‑compatible API key is not configured")
-        # Configure base URL if needed.  Some providers require
-        # setting openai.api_base and openai.api_key.
-        # openai.api_base = "https://your-provider-endpoint"
+            raise AppException("OpenAI-compatible API key is not configured")
         openai.api_key = self.settings.OPENAI_API_KEY
+        if getattr(self.settings, "OPENAI_BASE_URL", None):
+            openai.api_base = self.settings.OPENAI_BASE_URL
+        self.model = self.settings.OPENAI_MODEL
 
     def generate_sql(self, prompt: str, temperature: float, max_tokens: int) -> str:
-        # Use OpenAI client but support alternative endpoints
         try:
             response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+                model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=temperature,
                 max_tokens=max_tokens,
@@ -51,7 +44,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 "Provide a concise, plain language summary of the findings."
             )
             response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+                model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
                 max_tokens=200,
@@ -59,3 +52,6 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             return response["choices"][0]["message"]["content"].strip()
         except Exception as exc:
             raise AppException(str(exc))
+
+    async def health_check(self) -> bool:
+        return True

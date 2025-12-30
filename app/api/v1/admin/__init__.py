@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
+from opentelemetry import trace
+
 from app.api.dependencies import require_permission, UserContext
 from app.services.audit_service import AuditService
 from app.services.schema_policy_service import SchemaPolicyService
-from opentelemetry import trace
+from .schema_policy import router as schema_policy_router
 
-router = APIRouter(tags=["admin"]) 
+
+router = APIRouter(tags=["admin"])
 audit_service = AuditService()
 policy_service = SchemaPolicyService()
 tracer = trace.get_tracer(__name__)
@@ -17,17 +20,6 @@ async def approve_training(
 ):
     """
     Approve training data.
-    
-    Requires 'training:approve' permission.
-    If RBAC_ENABLED=false, all authenticated users can access.
-    If AUTH_ENABLED=false, anonymous users can access.
-    
-    Args:
-        training_id: Training data ID
-        user: Authenticated user (with permission check)
-    
-    Returns:
-        Success confirmation
     """
     audit_service.log(
         user_id=user.get("user_id", "anonymous"),
@@ -50,8 +42,6 @@ async def get_dashboard(
 ):
     """
     Get admin dashboard.
-    
-    Requires 'admin:view' permission.
     """
     return {
         "user": user["user_id"],
@@ -67,14 +57,6 @@ async def update_feature_toggle(
 ):
     """
     Governed feature toggle change (admin only).
-
-    Allowed runtime changes:
-    - ENABLE_SEMANTIC_CACHE
-    - ENABLE_RATE_LIMIT
-
-    Blocked runtime changes:
-    - AUTH_ENABLED
-    - RBAC_ENABLED
     """
     feature = payload.get("feature")
     value = payload.get("value")
@@ -88,7 +70,6 @@ async def update_feature_toggle(
     if feature not in allowed_runtime:
         raise HTTPException(status_code=400, detail="Unsupported feature toggle")
 
-    # In-memory acknowledgment only (no live mutation of BaseSettings here)
     with tracer.start_as_current_span(
         "admin.feature_toggle.change",
         attributes={
@@ -144,3 +125,6 @@ async def refresh_schema(user: UserContext = Depends(require_permission("admin:v
     Placeholder refresh hook; policy governs visible schema.
     """
     return {"success": True, "timestamp": "now"}
+
+
+router.include_router(schema_policy_router)

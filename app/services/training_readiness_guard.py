@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any
 
 from app.core.config import get_settings
 from app.core.db import session_scope
 from app.models.internal import AuditLog, SchemaAccessPolicy
+
+logger = logging.getLogger(__name__)
 
 
 class TrainingReadinessError(RuntimeError):
@@ -49,6 +52,14 @@ def assert_training_readiness() -> Dict[str, Any]:
             reasons.append("Blocked_SQL_Attempt found in last 7 days")
 
     if reasons:
+        if reasons == ["No active SchemaAccessPolicy found"]:
+            env = getattr(settings, "ENV", getattr(settings, "APP_ENV", ""))
+            allow_local_bypass = getattr(settings, "EASYDATA_ALLOW_LOCAL_NO_SCHEMA_POLICY", False)
+            if env == "local" and allow_local_bypass:
+                logger.warning(
+                    "TrainingReadinessGuard bypassed (local only): no SchemaAccessPolicy found"
+                )
+                return
         raise TrainingReadinessError("; ".join(reasons))
 
     return {

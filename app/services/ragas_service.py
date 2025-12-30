@@ -3,11 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import pandas as pd
-from ragas import evaluate
-from ragas.metrics import context_precision, context_recall, faithfulness, answer_relevance
-
+from app.core.config import get_settings
 from app.core.db import session_scope
+from app.core.exceptions import AppException
 from app.models.internal import RagasMetric
 
 
@@ -18,6 +16,11 @@ class RagasService:
     - Consumes post-execution artifacts (audit logs, training/feedback) provided by caller.
     - Persists per-query metrics and supports time-series aggregation.
     """
+
+    def __init__(self):
+        self.settings = get_settings()
+        if not getattr(self.settings, "ENABLE_RAG_QUALITY", False):
+            raise AppException("RAG Quality is disabled by configuration")
 
     def evaluate_and_store(
         self,
@@ -37,6 +40,15 @@ class RagasService:
         """
         if not dataset:
             return []
+
+        try:
+            import pandas as pd
+            from ragas import evaluate
+            from ragas.metrics import context_precision, context_recall, faithfulness, answer_relevance
+        except ImportError as exc:
+            raise AppException(
+                "ragas is not installed. Enable feature and install dependencies."
+            ) from exc
 
         # Prepare dataframe for ragas
         df = pd.DataFrame(

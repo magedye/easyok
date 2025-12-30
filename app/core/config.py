@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_TIMEOUT: int = 30
+    OPENAI_BASE_URL: Optional[str] = None
 
     GOOGLE_API_KEY: Optional[str] = None
     GOOGLE_MODEL: str = "gemini-1.5-pro"
@@ -179,6 +180,7 @@ class Settings(BaseSettings):
     RAGAS_EXECUTION_MODE: Literal["async", "offline"] = "async"
     ENABLE_RAGAS_EVALUATION: bool = True
     RAGAS_LINK_TO_AUDIT_LOG: bool = True
+    ENABLE_RAG_QUALITY: bool = False
 
     # =========================================================================
     # Arabic NLP Pipeline

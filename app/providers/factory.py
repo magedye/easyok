@@ -14,6 +14,10 @@ from app.providers.base import BaseLLMProvider
 def create_llm_provider(settings: Settings) -> BaseLLMProvider:
     provider = settings.LLM_PROVIDER.lower()
 
+    if provider == "openai_compatible":
+        from app.providers.llm.openai_compatible_provider import OpenAICompatibleProvider
+        return OpenAICompatibleProvider(settings)
+
     if provider == "openai":
         from app.providers.llm.openai_provider import OpenAIProvider
         return OpenAIProvider(settings)
@@ -31,8 +35,7 @@ def create_llm_provider(settings: Settings) -> BaseLLMProvider:
         return Phi3Provider(settings)
 
     if provider == "groq":
-        from app.providers.llm.groq_provider import GroqProvider
-        return GroqProvider(settings)
+        raise ValueError("GroqProvider is disabled; use openai_compatible with OPENAI_BASE_URL")
 
     raise ValueError(f"Unsupported LLM provider: {provider}")
 
