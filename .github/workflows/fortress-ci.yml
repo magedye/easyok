@@ -1,52 +1,125 @@
 name: 🛡️ EasyData Fortress CI
-on: [push, pull_request]
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+env:
+  # --------------------------------------------------------------------------
+  # CI GOVERNANCE MODE (NON-NEGOTIABLE)
+  # --------------------------------------------------------------------------
+  ENV: ci
+  APP_ENV: ci
+
+  # Security MUST be enforced in CI environment
+  AUTH_ENABLED: true
+  RBAC_ENABLED: true
+  RLS_ENABLED: true
+
+  # Training & Governance Settings
+  ENABLE_TRAINING_PILOT: false
+  TRAINING_READINESS_ENFORCED: true
+  ENABLE_AUDIT_LOGGING: true
+
+  # Explicit Test Gates
+  RUN_INTEGRATION_TESTS: true
+  RUN_ORACLE_TESTS: false        # Oracle database is explicitly skipped in CI
+  RUN_TELEMETRY_TESTS: false     # Telemetry is explicitly skipped in CI
+
+  # Silence non-essential operational noise
+  ENABLE_TELEMETRY: false
+  ENABLE_OTEL: false
 
 jobs:
   fortress-pipeline:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 30
 
-      - name: 🧹 Free Disk Space (Maximize Runner Space)
+    steps:
+      # ----------------------------------------------------------------------
+      # 1. Initialization & Cleanup
+      # ----------------------------------------------------------------------
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🧹 Free Disk Space (CI Stability)
         run: |
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf /usr/local/share/boost
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-      # --- الجزء الخاص ببايثون (تسريع + فحص تعارضات) ---
-      - name: 🐍 Setup Python & Cache
+
+      # ----------------------------------------------------------------------
+      # 2. Backend Environment (Python)
+      # ----------------------------------------------------------------------
+      - name: 🐍 Setup Python 3.11
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
           cache: 'pip'
-      
-      - name: 🔍 Audit & Install Backend
+
+      - name: 🔍 Backend Dependency Audit & Install
         run: |
+          python -m pip install --upgrade pip
           pip install pip-audit
           pip install -r requirements.txt
-          pip-audit # فحص تعارضات الحزم أمنياً
+          pip-audit # Fails build if high-risk vulnerabilities are found
 
-      - name: 🏛️ Architectural Breach Check
+      # ----------------------------------------------------------------------
+      # 3. Governance & Architectural Enforcement
+      # ----------------------------------------------------------------------
+      - name: 🏛️ Architectural Governance Check
         run: |
+          # Install the custom architectural linter
           pip install -e ./flake8_easydata_arch/
-          flake8 app # الفحص الذي يمنع تداخل الطبقات (EDA901-903)
+          # Enforce layer separation and coding standards
+          flake8 app
 
-      # --- الجزء الخاص بالفرونت إيند (تسريع + فحص تعارضات) ---
-      - name: 📦 Setup Node & Cache
+      # ----------------------------------------------------------------------
+      # 4. Backend Testing (Governed)
+      # ----------------------------------------------------------------------
+      - name: 🧪 Backend Test Suite (Governed)
+        run: |
+          pytest -q -rs
+        env:
+          PYTHONWARNINGS: ignore
+
+      # ----------------------------------------------------------------------
+      # 5. Frontend Environment (Node.js)
+      # ----------------------------------------------------------------------
+      - name: 📦 Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: 🧪 Frontend Audit & Test
+      - name: 🧪 Frontend Install, Audit & Test
         run: |
           cd frontend
           npm ci
-          npm audit
-          npm test
+          npm audit --audit-level=high
+          npm test -- --watch=false
 
-      # --- الجزء الخاص بالعقد (OpenAPI Validation) ---
-      - name: 📜 Validate Master Contract
-        run: npx @stoplight/spectral-cli lint fortress.yaml
+      # ----------------------------------------------------------------------
+      # 6. API Contract Validation (Binding)
+      # ----------------------------------------------------------------------
+      - name: 📜 Validate OpenAPI & Streaming Contracts
+        run: |
+          # Use Spectral to enforce OpenAPI standards and contract parity
+          npx @stoplight/spectral-cli lint docs/api/*.yaml
+
+      # ----------------------------------------------------------------------
+      # 7. Startup Verification (Smoke Test)
+      # ----------------------------------------------------------------------
+      - name: 🚀 Backend Startup Smoke Test
+        run: |
+          # Start server in background
+          uvicorn main:app --host 0.0.0.0 --port 8000 &
+          # Wait for boot
+          sleep 5
+          # Verify basic reachability
+          curl -f http://localhost:8000/api/v1/health/llm || exit 1

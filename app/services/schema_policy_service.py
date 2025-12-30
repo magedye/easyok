@@ -100,24 +100,25 @@ class SchemaPolicyService:
             session.add(policy)
             session.flush()
             session.refresh(policy)
-            self.audit_service.log(
-                user_id=approver or "anonymous",
-                role="admin",
-                action="Policy_Activation",
-                resource_id=policy.id,
-                payload={
-                    "schema": policy.schema_name,
-                    "allowed_tables": policy.allowed_tables,
-                    "allowed_columns": policy.allowed_columns,
-                    "denied_tables": policy.denied_tables,
-                    "excluded_tables": policy.excluded_tables,
-                    "excluded_columns": policy.excluded_columns,
-                    "version": policy.version,
-                },
-                status="completed",
-                outcome="success",
-            )
-            return policy
+
+        self.audit_service.log(
+            user_id=approver or "anonymous",
+            role="admin",
+            action="Policy_Activation",
+            resource_id=policy.id,
+            payload={
+                "schema": policy.schema_name,
+                "allowed_tables": policy.allowed_tables,
+                "allowed_columns": policy.allowed_columns,
+                "denied_tables": policy.denied_tables,
+                "excluded_tables": policy.excluded_tables,
+                "excluded_columns": policy.excluded_columns,
+                "version": policy.version,
+            },
+            status="completed",
+            outcome="success",
+        )
+        return policy
 
     def commit_policy(
         self,

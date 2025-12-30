@@ -1,15 +1,23 @@
 version: 2
 updates:
-  # 🐍 تحديث حزم بايثون (pip)
+  # 🐍 Python (pip) Updates
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
+    # قصر التحديثات على الثغرات الأمنية أو التحديثات البسيطة لضمان الاستقرار
+    open-pull-requests-limit: 5
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
 
-  # 📦 تحديث حزم الفرونت إيند (npm)
+  # 📦 Frontend (npm) Updates
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
       interval: "weekly"
-
- 
+    # منع التحديثات الجذرية (Major) آلياً لتجنب كسر واجهة المستخدم
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

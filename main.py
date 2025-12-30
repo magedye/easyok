@@ -10,39 +10,42 @@ in the `app` package.  Configuration values come from `.env` via
 details.
 """
 
+import time
+from datetime import datetime
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.requests import Request
-from datetime import datetime
-import time
 
 from app.core.config import settings
 from app.core.exceptions import AppException
+from app.core.policy_guard import enforce_environment_policy
 from app.api.v1 import (
-    query,
     admin,
-    health,
-    auth,
-    chat,
-    training,
-    assets,
-    feedback,
-    schema,
     api_catalog,
-    observability,
     analytics,
+    assets,
+    auth,
+    behavioral_feedback,
+    chat,
+    feedback,
+    health,
+    observability,
+    query,
     rag_quality,
+    schema,
+    training,
 )
 from app.api.v1.admin.settings import router as admin_settings_router
 from app.api.v1.admin.observability import router as admin_observability_router
 from app.api.v1.admin.training import router as admin_training_router
 from app.api.v1.admin.sandbox import router as admin_sandbox_router
-from app.api.v1 import behavioral_feedback
-from app.services.observability_service import ObservabilityService
-from app.telemetry import setup_tracing
 from app.services.alerting_guard import initialize_alerting
-from app.services.training_readiness_guard import assert_training_readiness, TrainingReadinessError
+from app.services.observability_service import ObservabilityService
+from app.services.schema_policy_bootstrap import bootstrap_local_schema_policy
+from app.services.training_readiness_guard import assert_training_readiness
+from app.telemetry import setup_tracing
 
 
 tags_metadata = [{"name": "health", "description": "Health endpoints"}]
@@ -50,6 +53,10 @@ tags_metadata = [{"name": "health", "description": "Health endpoints"}]
 
 def create_app() -> FastAPI:
     """Factory function to create the FastAPI application."""
+    enforce_environment_policy()
+    bootstrap_local_schema_policy()
+    assert_training_readiness()
+
     app = FastAPI(
         title="EasyData AI Analyst Backend",
         version="0.1.0",
@@ -69,7 +76,7 @@ def create_app() -> FastAPI:
                 "error_code": exc.error_code,
                 "timestamp": datetime.utcnow().isoformat(),
             },
-    )
+        )
 
     # CORS configuration (allow all origins for now; adjust for prod)
     cors_origins = settings.CORS_ORIGINS
@@ -123,12 +130,6 @@ def create_app() -> FastAPI:
 
     # Enforce alert gating early
     initialize_alerting()
-
-    # Enforce training readiness gates (hard fail on violation)
-    try:
-        assert_training_readiness()
-    except TrainingReadinessError as exc:
-        raise RuntimeError(f"Training readiness failed: {exc}") from exc
 
     setup_tracing(app, service_name="easydata-backend")
 

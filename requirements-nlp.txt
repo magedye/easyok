@@ -1,4 +1,9 @@
+# ============================================================================
+# OPTIONAL — Arabic NLP & Evaluation (Feature-Gated)
+# Loaded only if ENABLE_ARABIC_NLP / ENABLE_RAGAS_EVALUATION = true
+# ============================================================================
+
+torch
 camel-tools
 farasapy
-torch
 ragas==0.3.1

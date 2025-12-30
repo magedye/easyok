@@ -10,7 +10,8 @@ from typing import Iterable, Tuple, Dict, List
 from dataclasses import dataclass
 from pathlib import Path
 import uuid
-import chromadb  # type: ignore
+import os
+import importlib.util
 
 from app.core.config import Settings
 from app.core.exceptions import AppException
@@ -23,6 +24,19 @@ class ChromaProvider(BaseVectorStore):
 
     def __post_init__(self) -> None:
         try:
+            if not self.settings.ENABLE_TELEMETRY or not getattr(self.settings, "ANON_TELEMETRY", True):
+                os.environ.setdefault("CHROMA_TELEMETRY", "false")
+                os.environ.setdefault("ANONYMIZED_TELEMETRY", "false")
+                if importlib.util.find_spec("posthog") is not None:
+                    import posthog  # type: ignore
+
+                    def _noop_capture(*args, **kwargs):  # type: ignore[no-untyped-def]
+                        return None
+
+                    posthog.capture = _noop_capture  # type: ignore[assignment]
+
+            import chromadb  # type: ignore
+
             path = Path(self.settings.VECTOR_STORE_PATH)
             path.mkdir(parents=True, exist_ok=True)
             self.client = chromadb.PersistentClient(path=str(path))

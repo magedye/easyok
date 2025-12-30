@@ -1,9 +1,0 @@
-=== EasyData Fortress Verification (Ultimate) ===
-Date: Tue Dec 30 07:07:19 PM UTC 2025
-Backend: http://localhost:8000
-Context: ENV=local | ADMIN_LOCAL_BYPASS=true
-
-[0] Authentication
-WARN: Auth disabled or login failed (expected in local/demo)
-
-[1] Health & OpenAPI
