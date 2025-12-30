@@ -49,4 +49,4 @@ jobs:
 
       # --- الجزء الخاص بالعقد (OpenAPI Validation) ---
       - name: 📜 Validate Master Contract
-        run: npx @stoplight/spectral-cli lint easydata-fortress.yaml
+        run: npx @stoplight/spectral-cli lint fortress.yaml

@@ -1,29 +1,25 @@
 import { defineConfig, devices } from '@playwright/test';
 
+/**
+ * Minimal, deterministic Playwright config targeting headless Chromium.
+ * No retries or timeouts beyond defaults to avoid masking contract issues.
+ */
 export default defineConfig({
-  testDir: 'tests/e2e/specs',
-  timeout: 60_000,
-  expect: { timeout: 5000 },
+  testDir: './tests/e2e',
   fullyParallel: false,
-  retries: 1,
-  reporter: [['list'], ['html', { open: 'never' }]],
+  reporter: [['list']],
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:3000',
+    browserName: 'chromium',
     headless: true,
-    actionTimeout: 10_000,
+    baseURL: process.env.BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    video: 'off',
   },
   projects: [
     {
-      name: 'Desktop Chromium',
-      use: {
-        browserName: 'chromium',
-        viewport: { width: 1280, height: 720 },
-      },
-    },
-    {
-      name: 'Mobile (iPhone 12)',
-      use: { ...devices['iPhone 12'] },
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
 });

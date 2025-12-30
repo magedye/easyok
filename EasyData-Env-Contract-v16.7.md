@@ -44,6 +44,12 @@ Rules:
 - Variables not defined in `.env.example` are considered **legacy or custom**
 - Code **MUST NOT** rely on undeclared variables
 
+Clarification:
+
+- This document (EasyData-Env-Contract-v16.7.md) is the authoritative governance contract.
+- `.env.example` is a derived, executable reference template that reflects this contract.
+- In case of conflict, this document takes precedence over `.env.example`.
+
 ---
 
 ## 3. Security Baseline (Hard Constraints)
