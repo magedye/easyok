@@ -1,0 +1,46 @@
+NDJSONBaseChunk:
+  type: object
+  required: [type, trace_id, timestamp]
+  properties:
+    type: { type: string }
+    trace_id:
+      type: string
+      format: uuid
+    timestamp:
+      type: string
+      format: date-time
+
+NDJSONThinkingChunk:
+  allOf:
+    - $ref: '#/NDJSONBaseChunk'
+    - properties:
+        type: { const: thinking }
+        message: { type: string }
+
+NDJSONDataChunk:
+  allOf:
+    - $ref: '#/NDJSONBaseChunk'
+    - properties:
+        type: { const: data }
+        data:
+          description: Query or RAG payload
+          type: object
+
+NDJSONErrorChunk:
+  allOf:
+    - $ref: '#/NDJSONBaseChunk'
+    - properties:
+        type: { const: error }
+        error_code:
+          type: string
+          example: POLICY_VIOLATION
+        message: { type: string }
+        lang:
+          type: string
+          enum: [en, ar]
+
+NDJSONEndChunk:
+  allOf:
+    - $ref: '#/NDJSONBaseChunk'
+    - properties:
+        type: { const: end }

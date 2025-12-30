@@ -1,0 +1,372 @@
+# =========================
+# Auth & Identity
+# =========================
+
+LoginRequest:
+  type: object
+  required: [username, password]
+  properties:
+    username:
+      type: string
+    password:
+      type: string
+
+LoginResponse:
+  type: object
+  required: [access_token, token_type]
+  properties:
+    access_token:
+      type: string
+    token_type:
+      type: string
+      example: bearer
+
+SessionInfo:
+  type: object
+  required: [user_id, permissions]
+  properties:
+    user_id:
+      type: string
+    permissions:
+      type: array
+      items:
+        type: string
+
+# =========================
+# Query & Chat
+# =========================
+
+AskRequest:
+  type: object
+  required: [question]
+  properties:
+    question:
+      type: string
+    context:
+      type: string
+      nullable: true
+
+# =========================
+# Schema Connections
+# =========================
+
+SchemaConnectionCreate:
+  type: object
+  required: [name, db_type, connection_string]
+  properties:
+    name:
+      type: string
+    db_type:
+      type: string
+      enum: [oracle, postgres, mysql, mssql]
+    connection_string:
+      type: string
+
+SchemaConnection:
+  type: object
+  required: [id, name, db_type, created_at]
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    db_type:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+
+SchemaConnectionList:
+  type: object
+  required: [connections]
+  properties:
+    connections:
+      type: array
+      items:
+        $ref: '#/SchemaConnection'
+
+ConnectionTestResult:
+  type: object
+  required: [status]
+  properties:
+    status:
+      type: string
+      enum: [ok, failed]
+    message:
+      type: string
+      nullable: true
+
+# =========================
+# Schema Enumeration
+# =========================
+
+TableListResponse:
+  type: object
+  required: [tables]
+  properties:
+    tables:
+      type: array
+      items:
+        $ref: '#/TableMetadata'
+
+TableMetadata:
+  type: object
+  required: [name]
+  properties:
+    name:
+      type: string
+    schema:
+      type: string
+      nullable: true
+
+ColumnListResponse:
+  type: object
+  required: [columns]
+  properties:
+    columns:
+      type: array
+      items:
+        $ref: '#/ColumnMetadata'
+
+ColumnMetadata:
+  type: object
+  required: [name, type, nullable]
+  properties:
+    name:
+      type: string
+    type:
+      type: string
+    nullable:
+      type: boolean
+
+TableSampleResponse:
+  type: object
+  required: [rows]
+  properties:
+    rows:
+      type: array
+      items:
+        type: object
+        additionalProperties: true
+
+# =========================
+# Schema Policy Wizard
+# =========================
+
+PolicyDraft:
+  type: object
+  required:
+    - id
+    - connection_id
+    - allowed_tables
+    - denied_tables
+    - allowed_columns
+    - denied_columns
+    - status
+  properties:
+    id:
+      type: string
+    connection_id:
+      type: string
+    allowed_tables:
+      type: array
+      items: { type: string }
+    denied_tables:
+      type: array
+      items: { type: string }
+    allowed_columns:
+      type: object
+      additionalProperties:
+        type: array
+        items: { type: string }
+    denied_columns:
+      type: object
+      additionalProperties:
+        type: array
+        items: { type: string }
+    status:
+      type: string
+      enum: [draft, active]
+    version_id:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+
+PolicyPreviewResponse:
+  type: object
+  required: [tables_allowed, columns_allowed, warnings]
+  properties:
+    tables_allowed:
+      type: integer
+    columns_allowed:
+      type: integer
+    warnings:
+      type: array
+      items: { type: string }
+
+PolicyDraftResponse:
+  type: object
+  required: [policy]
+  properties:
+    policy:
+      $ref: '#/PolicyDraft'
+
+PolicyActivationResponse:
+  type: object
+  required: [policy_id, activated_at]
+  properties:
+    policy_id:
+      type: string
+    activated_at:
+      type: string
+      format: date-time
+
+# =========================
+# Training (Stage 6)
+# =========================
+
+TrainingSubmissionResponse:
+  type: object
+  required: [item_id, status]
+  properties:
+    item_id:
+      type: string
+    status:
+      type: string
+      enum: [pending]
+
+TrainingApprovalResponse:
+  type: object
+  required: [item_id, status]
+  properties:
+    item_id:
+      type: string
+    status:
+      type: string
+      enum: [approved]
+
+TrainingHistoryResponse:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/TrainingHistoryItem'
+
+TrainingHistoryItem:
+  type: object
+  required: [item_id, type, status, created_at]
+  properties:
+    item_id:
+      type: string
+    type:
+      type: string
+      enum: [manual, ddl, documentation, csv]
+    status:
+      type: string
+      enum: [pending, approved, rejected, rolled_back]
+    created_at:
+      type: string
+      format: date-time
+
+RollbackResponse:
+  type: object
+  required: [status, restored_version]
+  properties:
+    status:
+      type: string
+      enum: [ok]
+    restored_version:
+      type: string
+
+# =========================
+# Assumptions
+# =========================
+
+AssumptionListResponse:
+  type: object
+  required: [assumptions]
+  properties:
+    assumptions:
+      type: array
+      items:
+        $ref: '#/Assumption'
+
+Assumption:
+  type: object
+  required: [id, text, status]
+  properties:
+    id:
+      type: string
+    text:
+      type: string
+    status:
+      type: string
+      enum: [pending, approved, rejected]
+
+# =========================
+# Feedback
+# =========================
+
+FeedbackListResponse:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/FeedbackResponse'
+
+FeedbackResponse:
+  type: object
+  required: [id, message, created_at]
+  properties:
+    id:
+      type: string
+    message:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+
+# =========================
+# Audit & Admin
+# =========================
+
+AuditLogResponse:
+  type: object
+  required: [events]
+  properties:
+    events:
+      type: array
+      items:
+        $ref: '#/AuditEvent'
+
+AuditEvent:
+  type: object
+  required: [event, user_id, outcome, timestamp]
+  properties:
+    event:
+      type: string
+    user_id:
+      type: string
+    outcome:
+      type: string
+    timestamp:
+      type: string
+      format: date-time
+    payload_summary:
+      type: object
+      additionalProperties: true
+
+SchemaDriftResponse:
+  type: object
+  required: [drift_detected]
+  properties:
+    drift_detected:
+      type: boolean
+    details:
+      type: object
+      additionalProperties: true

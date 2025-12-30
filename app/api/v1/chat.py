@@ -171,7 +171,7 @@ async def chat_stream(
 
         if not is_safe or not assumptions:
             error_payload = {
-                "code": "invalid_query",
+                "code": "POLICY_VIOLATION",
                 "message": error_msg or "SQL rejected or assumptions missing",
             }
             yield f"event: error\ndata: {json.dumps(error_payload)}\n\n"

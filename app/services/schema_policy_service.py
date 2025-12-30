@@ -83,6 +83,7 @@ class SchemaPolicyService:
             session.query(SchemaAccessPolicy).filter(
                 SchemaAccessPolicy.status == "active",
                 SchemaAccessPolicy.schema_name == policy.schema_name,
+                SchemaAccessPolicy.db_connection_id == policy.db_connection_id,
             ).update({"status": "revoked"})
             # version increment
             latest_version = (

@@ -14,6 +14,7 @@ from app.services.factory import ServiceFactory
 from app.core.exceptions import InvalidQueryError
 from app.services.schema_policy_service import SchemaPolicyService
 from app.models.enums.confidence_tier import ConfidenceTier
+from app.utils.sql_guard import SQLGuard, SQLGuardViolation
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 import hashlib
@@ -24,6 +25,7 @@ settings = get_settings()
 audit_service = AuditService()
 policy_service = SchemaPolicyService()
 tracer = trace.get_tracer(__name__)
+sql_guard = SQLGuard(settings)
 
 
 def _ts() -> str:
@@ -149,7 +151,42 @@ async def ask(
                         "sql.dialect": "oracle",
                     },
                 ):
-                    pass
+                    try:
+                        policy = policy_service.get_active()
+                        sql_text = sql_guard.validate_and_normalise(sql_text, policy=policy)
+                        technical_view["sql"] = sql_text
+                        technical_view["is_safe"] = True
+                    except SQLGuardViolation as exc:
+                        audit_service.log(
+                            user_id=user.get("user_id", "anonymous"),
+                            role=user.get("role", "guest"),
+                            action="policy_blocked_query",
+                            resource_id=None,
+                            payload={"question": q_text, "reason": str(exc)},
+                            question=q_text,
+                            sql=sql_text,
+                            status="blocked",
+                            outcome="failed",
+                            error_message=str(exc),
+                        )
+                        yield _chunk(
+                            "error",
+                            {
+                                "message": "Access to forbidden table or column / تم حظر الاستعلام لاعتبارات السياسة",
+                                "error_code": "POLICY_VIOLATION",
+                            },
+                            trace_id=trace_id,
+                            tier=ConfidenceTier.TIER_0_FORTRESS,
+                            ts=_ts(),
+                        )
+                        yield _chunk(
+                            "end",
+                            {"status": "failed", "chunks": chunk_count + 1},
+                            trace_id=trace_id,
+                            tier=ConfidenceTier.TIER_0_FORTRESS,
+                            ts=_ts(),
+                        )
+                        return
 
                 audit_service.log(
                     user_id=user.get("user_id", "anonymous"),

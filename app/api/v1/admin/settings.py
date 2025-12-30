@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
-from app.api.dependencies import optional_auth, UserContext
+from app.api.dependencies import require_permission, UserContext
 from app.core.config import get_settings
 from app.core.exceptions import ServiceUnavailableError
 from app.services.audit_service import AuditService
@@ -69,7 +69,7 @@ def _enforce_sentry_rate_limit() -> None:
 
 
 @router.get("/feature-toggles")
-async def list_feature_toggles(user: UserContext = Depends(optional_auth)):
+async def list_feature_toggles(user: UserContext = Depends(require_permission("admin:view"))):
     _ensure_admin(user)
     state = _current_feature_state()
     features = []
@@ -85,7 +85,7 @@ async def list_feature_toggles(user: UserContext = Depends(optional_auth)):
 
 
 @router.get("/sentry-issues")
-async def get_sentry_issues(user: UserContext = Depends(optional_auth)):
+async def get_sentry_issues(user: UserContext = Depends(require_permission("admin:view"))):
     _ensure_admin(user)
     _enforce_sentry_rate_limit()
     try:
@@ -96,7 +96,7 @@ async def get_sentry_issues(user: UserContext = Depends(optional_auth)):
 
 
 @router.post("/feature-toggle")
-async def update_feature_toggle(payload: dict, user: UserContext = Depends(optional_auth)):
+async def update_feature_toggle(payload: dict, user: UserContext = Depends(require_permission("admin:view"))):
     _ensure_admin(user)
     feature = (payload.get("feature") or "").strip()
     reason = (payload.get("reason") or "").strip()

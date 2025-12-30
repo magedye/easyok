@@ -34,10 +34,10 @@ from app.api.v1 import (
     analytics,
     rag_quality,
 )
-from app.api.v1.admin import settings as admin_settings
-from app.api.v1.admin import observability as admin_observability
-from app.api.v1.admin import training as admin_training
-from app.api.v1.admin import sandbox as admin_sandbox
+from app.api.v1.admin.settings import router as admin_settings_router
+from app.api.v1.admin.observability import router as admin_observability_router
+from app.api.v1.admin.training import router as admin_training_router
+from app.api.v1.admin.sandbox import router as admin_sandbox_router
 from app.api.v1 import behavioral_feedback
 from app.services.observability_service import ObservabilityService
 from app.telemetry import setup_tracing
@@ -69,12 +69,15 @@ def create_app() -> FastAPI:
                 "error_code": exc.error_code,
                 "timestamp": datetime.utcnow().isoformat(),
             },
-        )
+    )
 
     # CORS configuration (allow all origins for now; adjust for prod)
+    cors_origins = settings.CORS_ORIGINS
+    if settings.APP_ENV == "production" and "*" in cors_origins:
+        raise RuntimeError("CORS_ORIGINS cannot include '*' in production")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -107,10 +110,10 @@ def create_app() -> FastAPI:
     app.include_router(observability.router, prefix="/api/v1")
     app.include_router(analytics.router, prefix="/api/v1")
     app.include_router(rag_quality.router, prefix="/api/v1")
-    app.include_router(admin_settings.router, prefix="/api/v1")
-    app.include_router(admin_observability.router, prefix="/api/v1")
-    app.include_router(admin_training.router, prefix="/api/v1")
-    app.include_router(admin_sandbox.router, prefix="/api/v1")
+    app.include_router(admin_settings_router, prefix="/api/v1")
+    app.include_router(admin_observability_router, prefix="/api/v1")
+    app.include_router(admin_training_router, prefix="/api/v1")
+    app.include_router(admin_sandbox_router, prefix="/api/v1")
     # Health router already has prefix="/health"; include at /api/v1
     app.include_router(health.router, prefix="/api/v1")
 
@@ -141,6 +144,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
-        reload=True,
+        port=settings.BACKEND_PORT,
+        reload=(settings.APP_ENV == "development"),
     )

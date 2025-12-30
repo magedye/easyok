@@ -1,0 +1,17 @@
+generatorName: java
+inputSpec: ../fortress.yaml
+outputDir: ../../sdk/java
+additionalProperties:
+  artifactId: easydata-fortress-sdk
+  groupId: com.easydata.fortress
+  artifactVersion: "16.7.9"
+  java8: true
+  dateLibrary: java8
+  useJakartaEe: true
+  serializationLibrary: jackson
+  library: webclient
+
+globalProperties:
+  models: true
+  apis: true
+  supportingFiles: false

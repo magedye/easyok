@@ -1,0 +1,16 @@
+generatorName: python
+inputSpec: ../fortress.yaml
+outputDir: ../../sdk/python
+additionalProperties:
+  packageName: easydata_fortress
+  projectName: easydata-fortress-sdk
+  packageVersion: "16.7.9"
+  usePydanticV2: true
+  generateSourceCodeOnly: true
+  httpClient: httpx
+  library: asyncio
+
+globalProperties:
+  models: true
+  apis: true
+  supportingFiles: false

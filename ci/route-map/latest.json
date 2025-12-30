@@ -1,0 +1,1062 @@
+{
+  "generated_at": "2025-12-30T14:32:01.454905Z",
+  "routes": [
+    {
+      "path": "/openapi.json",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "fastapi.applications.openapi",
+      "name": "openapi",
+      "tags": [],
+      "dependencies": []
+    },
+    {
+      "path": "/docs",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "fastapi.applications.swagger_ui_html",
+      "name": "swagger_ui_html",
+      "tags": [],
+      "dependencies": []
+    },
+    {
+      "path": "/docs/oauth2-redirect",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "fastapi.applications.swagger_ui_redirect",
+      "name": "swagger_ui_redirect",
+      "tags": [],
+      "dependencies": []
+    },
+    {
+      "path": "/redoc",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "fastapi.applications.redoc_html",
+      "name": "redoc_html",
+      "tags": [],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/ask",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.query.ask",
+      "name": "ask",
+      "tags": [
+        "query"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/auth/login",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.auth.login",
+      "name": "login",
+      "tags": [],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.auth.get_current_user_info",
+      "name": "get_current_user_info",
+      "tags": [],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/auth/logout",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.auth.logout",
+      "name": "logout",
+      "tags": [],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/auth/validate",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.auth.validate_token",
+      "name": "validate_token",
+      "tags": [],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/auth/status",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.auth.auth_status",
+      "name": "auth_status",
+      "tags": [],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/training/approve",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.admin.approve_training",
+      "name": "approve_training",
+      "tags": [
+        "admin"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/dashboard",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.admin.get_dashboard",
+      "name": "get_dashboard",
+      "tags": [
+        "admin"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/schema",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.admin.get_schema",
+      "name": "get_schema",
+      "tags": [
+        "admin"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/schema/refresh",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.admin.refresh_schema",
+      "name": "refresh_schema",
+      "tags": [
+        "admin"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/audit",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.admin.get_audit_log",
+      "name": "get_audit_log",
+      "tags": [
+        "admin"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/schema/drift",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.admin.schema_drift",
+      "name": "schema_drift",
+      "tags": [
+        "admin"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/schema/drift/retrain",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.admin.retrain_on_drift",
+      "name": "retrain_on_drift",
+      "tags": [
+        "admin"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/run_sql_csv",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.admin.run_sql_csv",
+      "name": "run_sql_csv",
+      "tags": [
+        "admin"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/schema-policy",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.admin.schema_policy.create_schema_policy",
+      "name": "create_schema_policy",
+      "tags": [
+        "admin",
+        "admin"
+      ],
+      "dependencies": [
+        "checker"
+      ]
+    },
+    {
+      "path": "/api/v1/chat/stream",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.chat.chat_stream",
+      "name": "chat_stream",
+      "tags": [
+        "chat"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/training/ddl",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.training.submit_ddl",
+      "name": "submit_ddl",
+      "tags": [
+        "training"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/training/manual",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.training.submit_manual",
+      "name": "submit_manual",
+      "tags": [
+        "training"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/training/pending",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.training.list_pending",
+      "name": "list_pending",
+      "tags": [
+        "training"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/training/approve/{item_id}",
+      "methods": [
+        "PATCH"
+      ],
+      "endpoint": "app.api.v1.training.approve",
+      "name": "approve",
+      "tags": [
+        "training"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/training/purge",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "app.api.v1.training.purge",
+      "name": "purge",
+      "tags": [
+        "training"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/training/reject/{item_id}",
+      "methods": [
+        "PATCH"
+      ],
+      "endpoint": "app.api.v1.training.reject",
+      "name": "reject",
+      "tags": [
+        "training"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/training/history",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.training.training_history",
+      "name": "training_history",
+      "tags": [
+        "training"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/training/rollback",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.training.training_rollback",
+      "name": "training_rollback",
+      "tags": [
+        "training"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/train/assumptions",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.training.list_assumptions",
+      "name": "list_assumptions",
+      "tags": [
+        "training"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/train/assumptions/approve",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.training.approve_assumption",
+      "name": "approve_assumption",
+      "tags": [
+        "training"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/train/assumptions/reject",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.training.reject_assumption",
+      "name": "reject_assumption",
+      "tags": [
+        "training"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/assets/queries",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.assets.save_asset",
+      "name": "save_asset",
+      "tags": [
+        "assets"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/assets/queries",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.assets.list_assets",
+      "name": "list_assets",
+      "tags": [
+        "assets"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/assets/queries/{asset_id}",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "app.api.v1.assets.delete_asset",
+      "name": "delete_asset",
+      "tags": [
+        "assets"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/feedback",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.feedback.submit_feedback",
+      "name": "submit_feedback",
+      "tags": [
+        "feedback"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/feedback/pending",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.feedback.list_pending_feedback",
+      "name": "list_pending_feedback",
+      "tags": [
+        "feedback"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/feedback/{feedback_id}",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.feedback.get_feedback",
+      "name": "get_feedback",
+      "tags": [
+        "feedback"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/analytics/behavioral",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.behavioral_feedback.record_event",
+      "name": "record_event",
+      "tags": [
+        "analytics"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/analytics/behavioral",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.behavioral_feedback.list_events",
+      "name": "list_events",
+      "tags": [
+        "analytics"
+      ],
+      "dependencies": [
+        "checker"
+      ]
+    },
+    {
+      "path": "/api/v1/schema/discover",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.schema.discover_schema",
+      "name": "discover_schema",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/{connection_id}/tables",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.schema.list_tables",
+      "name": "list_tables",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/{connection_id}/tables/{table}/columns",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.schema.list_columns",
+      "name": "list_columns",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/{connection_id}/tables/{table}/sample",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.schema.sample_table",
+      "name": "sample_table",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/connections",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.schema.create_schema_connection",
+      "name": "create_schema_connection",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/connections",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.schema.list_schema_connections",
+      "name": "list_schema_connections",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/connections/{connection_id}",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.schema.get_schema_connection",
+      "name": "get_schema_connection",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/connections/{connection_id}/test",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.schema.test_schema_connection",
+      "name": "test_schema_connection",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/connections/{connection_id}",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "app.api.v1.schema.delete_schema_connection",
+      "name": "delete_schema_connection",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/{connection_id}/inspect",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.schema.inspect_schema",
+      "name": "inspect_schema",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/policy/draft",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.schema.create_policy_draft",
+      "name": "create_policy_draft",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/policy/wizard/preview",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.schema.policy_wizard_preview",
+      "name": "policy_wizard_preview",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/policy/wizard/commit",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.schema.policy_wizard_commit",
+      "name": "policy_wizard_commit",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/policy/{policy_id}",
+      "methods": [
+        "PATCH"
+      ],
+      "endpoint": "app.api.v1.schema.update_policy_draft",
+      "name": "update_policy_draft",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/policy/{policy_id}/activate",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.schema.activate_policy",
+      "name": "activate_policy",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/schema/policy/commit",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.schema.commit_policy",
+      "name": "commit_policy",
+      "tags": [
+        "schema"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.api_catalog.get_catalog",
+      "name": "get_catalog",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/versions",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.api_catalog.get_versions",
+      "name": "get_versions",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/versions/{version_id}",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.api_catalog.get_version",
+      "name": "get_version",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/versions/{version_id}/publish",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.api_catalog.publish_version",
+      "name": "publish_version",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/versions/{version_id}/preview",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.api_catalog.preview_version",
+      "name": "preview_version",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/validate",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.api_catalog.validate_catalog",
+      "name": "validate_catalog",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/endpoints",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.api_catalog.create_endpoint",
+      "name": "create_endpoint",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/endpoints/{endpoint_id}",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "app.api.v1.api_catalog.update_endpoint",
+      "name": "update_endpoint",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/endpoints/{endpoint_id}",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "app.api.v1.api_catalog.delete_endpoint",
+      "name": "delete_endpoint",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/endpoints",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.api_catalog.list_endpoints",
+      "name": "list_endpoints",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/endpoints/{endpoint_id}",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.api_catalog.get_endpoint",
+      "name": "get_endpoint",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/connections",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.api_catalog.create_connection",
+      "name": "create_connection",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/connections/{connection_id}",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "app.api.v1.api_catalog.update_connection",
+      "name": "update_connection",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/connections/{connection_id}",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "app.api.v1.api_catalog.delete_connection",
+      "name": "delete_connection",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/connections",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.api_catalog.list_connections",
+      "name": "list_connections",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/connections/{connection_id}",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.api_catalog.get_connection",
+      "name": "get_connection",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/api-catalog/connections/{connection_id}/test",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.api_catalog.test_connection",
+      "name": "test_connection",
+      "tags": [
+        "api-catalog"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/health",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.observability.system_health",
+      "name": "system_health",
+      "tags": [
+        "observability"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/metrics",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.observability.system_metrics",
+      "name": "system_metrics",
+      "tags": [
+        "observability"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/telemetry",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.observability.system_aggregates",
+      "name": "system_aggregates",
+      "tags": [
+        "observability"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/analytics/user",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.analytics.user_analytics",
+      "name": "user_analytics",
+      "tags": [
+        "analytics"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/analytics/rag-quality",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.rag_quality.rag_quality",
+      "name": "rag_quality",
+      "tags": [
+        "analytics"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/settings/feature-toggles",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.admin.settings.list_feature_toggles",
+      "name": "list_feature_toggles",
+      "tags": [
+        "admin-settings"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/settings/sentry-issues",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.admin.settings.get_sentry_issues",
+      "name": "get_sentry_issues",
+      "tags": [
+        "admin-settings"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/settings/feature-toggle",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.admin.settings.update_feature_toggle",
+      "name": "update_feature_toggle",
+      "tags": [
+        "admin-settings"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/observability/status",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.admin.observability.observability_status",
+      "name": "observability_status",
+      "tags": [
+        "admin-observability"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/training/pending",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.admin.training.list_pending",
+      "name": "list_pending",
+      "tags": [
+        "admin-training"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/training/approve/{staging_id}",
+      "methods": [
+        "PATCH"
+      ],
+      "endpoint": "app.api.v1.admin.training.approve_item",
+      "name": "approve_item",
+      "tags": [
+        "admin-training"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/training/reject/{staging_id}",
+      "methods": [
+        "PATCH"
+      ],
+      "endpoint": "app.api.v1.admin.training.reject_item",
+      "name": "reject_item",
+      "tags": [
+        "admin-training"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/sandbox/execute",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.admin.sandbox.execute_sandbox",
+      "name": "execute_sandbox",
+      "tags": [
+        "admin"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/admin/sandbox/promote",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "app.api.v1.admin.sandbox.promote_sandbox",
+      "name": "promote_sandbox",
+      "tags": [
+        "admin"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/health/llm",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.health.llm_health",
+      "name": "llm_health",
+      "tags": [
+        "health"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/api/v1/health",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "app.api.v1.health.system_health",
+      "name": "system_health",
+      "tags": [
+        "health"
+      ],
+      "dependencies": []
+    },
+    {
+      "path": "/metrics/json",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "main.metrics_json",
+      "name": "metrics_json",
+      "tags": [
+        "health"
+      ],
+      "dependencies": []
+    }
+  ],
+  "orphan_routes": [],
+  "unprotected_admin_routes": []
+}

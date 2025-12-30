@@ -23,24 +23,49 @@ ANONYMOUS_CONTEXT: UserContext = {
 # ============================================================================
 
 ROLE_PERMISSION_MAP = {
-    "viewer": ["query:execute"],
+    "viewer": ["query:execute", "query.execute"],
     "analyst": [
         "query:execute",
+        "query.execute",
         "asset:read",
         "asset:write",
         "training:upload",
+        "training.read",
         "feedback:submit",
+        "schema:connections",
+        "schema.connections",
+        "auth.session.read",
+        "schema.policy",
+        "assumptions.review",
+        "assumptions.approve",
     ],
     "admin": [
         "query:execute",
+        "query.execute",
         "asset:read",
         "asset:write",
         "asset:delete",
         "training:upload",
         "training:approve",
         "training:purge",
+        "training.read",
+        "training.rollback",
         "audit:view",
+        "admin.audit.read",
         "feedback:submit",
+        "feedback.review",
+        "schema:connections",
+        "schema.connections",
+        "auth.session.read",
+        "auth.logout",
+        "auth.validate",
+        "schema.policy",
+        "schema.policy.activate",
+        "assumptions.review",
+        "assumptions.approve",
+        "admin.schema.drift",
+        "admin.schema.retrain",
+        "admin.sql.export",
     ],
 }
 
@@ -185,8 +210,14 @@ def require_permission(permission: str):
         if not settings.RBAC_ENABLED:
             return user
         
-        # 🔐 RBAC Enabled → Check Permission
-        if permission not in user["permissions"]:
+        # 🔐 RBAC Enabled → Check Permission (accept dot/colon aliases)
+        perms = user["permissions"]
+        aliases = {permission}
+        if ":" in permission:
+            aliases.add(permission.replace(":", "."))
+        if "." in permission:
+            aliases.add(permission.replace(".", ":"))
+        if not any(p in perms for p in aliases):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Missing required permission: {permission}",

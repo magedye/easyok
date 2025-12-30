@@ -3,10 +3,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.api.dependencies import require_permission, UserContext
 from app.core.exceptions import AppException
 from app.models.schema_policy import SchemaAccessPolicyCreate
+
 from app.services.schema_policy_service import SchemaPolicyService
 
-router = APIRouter(prefix="/admin/schema-policy", tags=["admin"])
-
+router = APIRouter(prefix="/schema-policy", tags=["admin"])
 
 @router.post(
     "",

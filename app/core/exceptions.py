@@ -37,6 +37,12 @@ class InvalidQueryError(AppException):
     message = "Generated SQL is invalid"
 
 
+class InvalidConnectionStringError(AppException):
+    status_code = 400
+    error_code = "INVALID_CONNECTION_STRING"
+    message = "Invalid database connection string"
+
+
 class UnauthorizedError(AppException):
     status_code = 401
     error_code = "unauthorized"

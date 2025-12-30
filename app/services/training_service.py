@@ -48,9 +48,34 @@ class TrainingService:
             )
             raise ValueError("SECURITY_VIOLATION: training violates taxonomy/policy")
 
+        policy = self.policy_service.get_active()
+        schema_version = getattr(policy, "schema_name", "") or ""
+        policy_version = str(getattr(policy, "version", "") or "")
+
+        # Map payload to persisted fields
+        if item_type == "sql":
+            question = payload.get("question") or ""
+            sql = payload.get("sql") or ""
+            assumptions = json.dumps(payload.get("metadata") or {})
+        elif item_type == "ddl":
+            question = "ddl"
+            sql = payload.get("ddl") or payload.get("text") or ""
+            assumptions = "DDL ingestion"
+        else:
+            question = payload.get("question") or ""
+            sql = payload.get("sql") or payload.get("text") or ""
+            assumptions = payload.get("assumptions") or ""
+
+        if not assumptions:
+            assumptions = "Pending review"
+
         ti = TrainingItem(
             item_type=item_type,
-            payload=json.dumps(payload),
+            question=question,
+            sql=sql,
+            assumptions=assumptions,
+            schema_version=schema_version,
+            policy_version=policy_version,
             status=status,
             created_by=created_by,
         )
@@ -81,7 +106,12 @@ class TrainingService:
 
             ti.approved_at = datetime.utcnow()
             session.add(ti)
-            payload = json.loads(ti.payload or "{}")
+            payload: Dict[str, Any] = {
+                "question": ti.question,
+                "sql": ti.sql,
+                "ddl": ti.sql if ti.item_type == "ddl" else None,
+                "assumptions": ti.assumptions,
+            }
             self._apply_to_vector(ti.item_type, payload)
             session.flush()
             session.refresh(ti)

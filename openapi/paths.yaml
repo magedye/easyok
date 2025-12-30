@@ -1,0 +1,553 @@
+# =========================
+# Auth & Identity
+# =========================
+
+/auth/login:
+  post:
+    operationId: auth_login
+    tags: [auth]
+    summary: Login and obtain JWT
+    x-permissions: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/LoginRequest'
+    responses:
+      '200':
+        description: Authenticated
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginResponse'
+      '401':
+        description: Invalid credentials
+        content:
+          application/json:
+            schema:
+              $ref: './errors.yaml#/ErrorResponse'
+
+/auth/me:
+  get:
+    operationId: auth_me
+    tags: [auth]
+    summary: Get current session and permissions
+    x-permissions: [auth.session.read]
+    responses:
+      '200':
+        description: Session info
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionInfo'
+
+/auth/logout:
+  post:
+    operationId: auth_logout
+    tags: [auth]
+    summary: Logout and invalidate session
+    x-permissions: [auth.logout]
+    responses:
+      '204':
+        description: Logged out
+
+/auth/validate:
+  post:
+    operationId: auth_validate
+    tags: [auth]
+    summary: Validate JWT (internal)
+    x-permissions: [auth.validate]
+    responses:
+      '200':
+        description: Token valid
+
+# =========================
+# Query & Chat (Streaming)
+# =========================
+
+/ask:
+  post:
+    operationId: query_execute
+    tags: [query]
+    summary: Execute governed query (NDJSON)
+    x-permissions: [query.execute]
+    x-risk: HIGH
+    x-policy-bound: true
+    x-audit-required: true
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AskRequest'
+    responses:
+      '200':
+        description: NDJSON stream
+        content:
+          application/x-ndjson:
+            schema:
+              oneOf:
+                - $ref: './streaming.yaml#/NDJSONThinkingChunk'
+                - $ref: './streaming.yaml#/NDJSONDataChunk'
+                - $ref: './streaming.yaml#/NDJSONErrorChunk'
+                - $ref: './streaming.yaml#/NDJSONEndChunk'
+      '403':
+        description: Policy violation (pre-stream)
+        content:
+          application/json:
+            schema:
+              $ref: './errors.yaml#/ErrorResponse'
+
+/chat/stream:
+  get:
+    operationId: chat_stream
+    tags: [chat]
+    summary: Chat completion via SSE
+    x-permissions: [query.execute]
+    x-policy-bound: true
+    responses:
+      '200':
+        description: SSE stream
+        content:
+          text/event-stream:
+            schema:
+              oneOf:
+                - $ref: './streaming.yaml#/NDJSONThinkingChunk'
+                - $ref: './streaming.yaml#/NDJSONDataChunk'
+                - $ref: './streaming.yaml#/NDJSONErrorChunk'
+                - $ref: './streaming.yaml#/NDJSONEndChunk'
+
+# =========================
+# Schema Connections
+# =========================
+
+/schema/connections:
+  get:
+    operationId: schema_list_connections
+    tags: [schema-connections]
+    summary: List schema connections
+    x-permissions: [schema.connections]
+    responses:
+      '200':
+        description: Connections list
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchemaConnectionList'
+
+  post:
+    operationId: schema_create_connection
+    tags: [schema-connections]
+    summary: Create schema connection
+    x-permissions: [schema.connections]
+    x-audit-required: true
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SchemaConnectionCreate'
+    responses:
+      '201':
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchemaConnection'
+
+/schema/connections/{connection_id}:
+  get:
+    operationId: schema_get_connection
+    tags: [schema-connections]
+    summary: Get schema connection
+    x-permissions: [schema.connections]
+    parameters:
+      - in: path
+        name: connection_id
+        required: true
+        schema: { type: string }
+    responses:
+      '200':
+        description: Connection details
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchemaConnection'
+
+  delete:
+    operationId: schema_delete_connection
+    tags: [schema-connections]
+    summary: Delete schema connection
+    x-permissions: [schema.connections]
+    x-audit-required: true
+    responses:
+      '204':
+        description: Deleted
+
+/schema/connections/{connection_id}/test:
+  post:
+    operationId: schema_test_connection
+    tags: [schema-connections]
+    summary: Test schema connection
+    x-permissions: [schema.connections]
+    responses:
+      '200':
+        description: Test result
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionTestResult'
+
+# =========================
+# Schema Enumeration
+# =========================
+
+/schema/{connection_id}/tables:
+  get:
+    operationId: schema_list_tables
+    tags: [schema]
+    summary: List tables
+    x-permissions: [schema.connections]
+    parameters:
+      - in: path
+        name: connection_id
+        required: true
+        schema: { type: string }
+    responses:
+      '200':
+        description: Tables list
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableListResponse'
+
+/schema/{connection_id}/tables/{table}/columns:
+  get:
+    operationId: schema_list_columns
+    tags: [schema]
+    summary: List table columns
+    x-permissions: [schema.connections]
+    parameters:
+      - in: path
+        name: connection_id
+        required: true
+        schema: { type: string }
+      - in: path
+        name: table
+        required: true
+        schema: { type: string }
+    responses:
+      '200':
+        description: Columns list
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ColumnListResponse'
+
+/schema/{connection_id}/tables/{table}/sample:
+  get:
+    operationId: schema_sample_table
+    tags: [schema]
+    summary: Sample table rows (row-capped)
+    x-permissions: [schema.connections]
+    x-risk: HIGH
+    x-policy-bound: true
+    x-audit-required: true
+    responses:
+      '200':
+        description: Sample rows
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableSampleResponse'
+
+# =========================
+# Policy Wizard
+# =========================
+
+/schema/policy/wizard/preview:
+  post:
+    operationId: policy_preview
+    tags: [schema-policy]
+    summary: Preview schema policy impact
+    x-permissions: [schema.policy]
+    responses:
+      '200':
+        description: Preview result
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyPreviewResponse'
+
+/schema/policy/wizard/commit:
+  post:
+    operationId: policy_commit
+    tags: [schema-policy]
+    summary: Commit policy draft
+    x-permissions: [schema.policy]
+    x-audit-required: true
+    responses:
+      '201':
+        description: Draft committed
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyDraftResponse'
+
+/schema/policy/{policy_id}/activate:
+  post:
+    operationId: policy_activate
+    tags: [schema-policy]
+    summary: Activate schema policy
+    x-permissions: [schema.policy.activate]
+    x-risk: HIGH
+    x-audit-required: true
+    parameters:
+      - in: path
+        name: policy_id
+        required: true
+        schema: { type: string }
+    responses:
+      '200':
+        description: Activated
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyActivationResponse'
+
+# =========================
+# Training (Stage 6)
+# =========================
+
+/training/manual:
+  post:
+    operationId: training_manual_submit
+    tags: [training]
+    summary: Submit manual SQL training
+    x-permissions: [training.upload]
+    x-policy-bound: true
+    x-audit-required: true
+    responses:
+      '201':
+        description: Submitted
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrainingSubmissionResponse'
+
+/training/ddl:
+  post:
+    operationId: training_ddl_submit
+    tags: [training]
+    summary: Submit DDL training
+    x-permissions: [training.upload]
+    x-audit-required: true
+    responses:
+      '201':
+        description: Submitted
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrainingSubmissionResponse'
+
+/training/approve/{item_id}:
+  patch:
+    operationId: training_approve
+    tags: [training]
+    summary: Approve training item
+    x-permissions: [training.approve]
+    x-risk: HIGH
+    x-audit-required: true
+    parameters:
+      - in: path
+        name: item_id
+        required: true
+        schema: { type: string }
+    responses:
+      '200':
+        description: Approved
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrainingApprovalResponse'
+
+/training/reject/{item_id}:
+  patch:
+    operationId: training_reject
+    tags: [training]
+    summary: Reject training item
+    x-permissions: [training.approve]
+    x-audit-required: true
+    responses:
+      '200':
+        description: Rejected
+
+/training/history:
+  get:
+    operationId: training_history
+    tags: [training]
+    summary: Training history
+    x-permissions: [training.read]
+    responses:
+      '200':
+        description: History
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrainingHistoryResponse'
+
+/training/rollback:
+  post:
+    operationId: training_rollback
+    tags: [training]
+    summary: Rollback vector store
+    x-permissions: [training.rollback]
+    x-risk: CRITICAL
+    x-audit-required: true
+    responses:
+      '200':
+        description: Rolled back
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RollbackResponse'
+
+# =========================
+# Assumptions
+# =========================
+
+/train/assumptions:
+  get:
+    operationId: assumptions_list
+    tags: [assumptions]
+    summary: List inferred assumptions
+    x-permissions: [assumptions.review]
+    responses:
+      '200':
+        description: Assumptions
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssumptionListResponse'
+
+/train/assumptions/approve:
+  post:
+    operationId: assumptions_approve
+    tags: [assumptions]
+    summary: Approve assumption
+    x-permissions: [assumptions.approve]
+    x-audit-required: true
+    responses:
+      '200':
+        description: Approved
+
+/train/assumptions/reject:
+  post:
+    operationId: assumptions_reject
+    tags: [assumptions]
+    summary: Reject assumption
+    x-permissions: [assumptions.approve]
+    x-audit-required: true
+    responses:
+      '200':
+        description: Rejected
+
+# =========================
+# Feedback
+# =========================
+
+/feedback/pending:
+  get:
+    operationId: feedback_pending
+    tags: [feedback]
+    summary: Pending feedback
+    x-permissions: [feedback.review]
+    responses:
+      '200':
+        description: Pending
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackListResponse'
+
+/feedback/{id}:
+  get:
+    operationId: feedback_get
+    tags: [feedback]
+    summary: Feedback details
+    x-permissions: [feedback.review]
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    responses:
+      '200':
+        description: Feedback
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackResponse'
+
+# =========================
+# Admin & Audit
+# =========================
+
+/admin/audit:
+  get:
+    operationId: admin_audit_log
+    tags: [audit]
+    summary: Immutable audit log
+    x-permissions: [admin.audit.read]
+    responses:
+      '200':
+        description: Audit log
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditLogResponse'
+
+/admin/schema/drift:
+  get:
+    operationId: admin_schema_drift
+    tags: [admin]
+    summary: Detect schema drift
+    x-permissions: [admin.schema.drift]
+    responses:
+      '200':
+        description: Drift report
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchemaDriftResponse'
+
+/admin/schema/drift/retrain:
+  post:
+    operationId: admin_schema_drift_retrain
+    tags: [admin]
+    summary: Retrain on schema drift
+    x-permissions: [admin.schema.retrain]
+    x-risk: HIGH
+    x-audit-required: true
+    responses:
+      '202':
+        description: Retraining started
+
+/admin/run_sql_csv:
+  post:
+    operationId: admin_run_sql_csv
+    tags: [admin]
+    summary: Execute governed SQL and export CSV
+    x-permissions: [admin.sql.export]
+    x-risk: CRITICAL
+    x-policy-bound: true
+    x-audit-required: true
+    responses:
+      '200':
+        description: CSV export
+        content:
+          text/csv:
+            schema:
+              type: string
+              format: binary

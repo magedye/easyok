@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from app.api.dependencies import require_permission, UserContext
 from app.core.config import get_settings
 from app.core.db import session_scope
-from app.models.internal import TrainingStaging, SchemaAccessPolicy
+from app.models.internal import TrainingStaging, SchemaAccessPolicy, UserFeedback
 from app.utils.sql_guard import SQLGuard, SQLGuardViolation
 
 
@@ -73,3 +73,38 @@ async def submit_feedback(
             session.flush()
 
     return {"status": "pending"}
+
+
+@router.get("/feedback/pending")
+async def list_pending_feedback(
+    user: UserContext = Depends(require_permission("feedback.review")),
+):
+    with session_scope() as session:
+        rows = (
+            session.query(UserFeedback)
+            .filter(UserFeedback.is_valid.is_(None))
+            .order_by(UserFeedback.created_at.desc())
+            .all()
+        )
+    items = [
+        {"id": fb.id, "message": fb.comment or "", "created_at": fb.created_at}
+        for fb in rows
+    ]
+    return {"items": items}
+
+
+@router.get("/feedback/{feedback_id}")
+async def get_feedback(
+    feedback_id: int,
+    user: UserContext = Depends(require_permission("feedback.review")),
+):
+    with session_scope() as session:
+        fb = session.get(UserFeedback, feedback_id)
+    if not fb:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+    return {
+        "id": fb.id,
+        "message": fb.comment or "",
+        "created_at": fb.created_at,
+        "user_id": fb.user_id,
+    }

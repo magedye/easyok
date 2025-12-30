@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.api.dependencies import require_permission, UserContext
 from app.core.admin_rbac import require_admin, get_current_user
 from app.services.audit_service import AuditService
 from app.services.shadow_execution_service import ShadowExecutionService
@@ -43,7 +44,10 @@ def _chunk(chunk_type: str, payload: Any, *, trace_id: str, tier: ConfidenceTier
 
 @router.post("/execute", status_code=status.HTTP_200_OK, response_class=StreamingResponse)
 @require_admin
-async def execute_sandbox(request: SandboxExecuteRequest):
+async def execute_sandbox(
+    request: SandboxExecuteRequest,
+    user: UserContext = Depends(require_permission("admin:view")),
+):
     """
     Execute exploratory SQL in an isolated sandbox (advisory only).
     Returns NDJSON with experimental and end chunks.
@@ -79,7 +83,10 @@ async def execute_sandbox(request: SandboxExecuteRequest):
 
 @router.post("/promote", status_code=status.HTTP_200_OK)
 @require_admin
-async def promote_sandbox(request: SandboxPromotionRequest):
+async def promote_sandbox(
+    request: SandboxPromotionRequest,
+    user: UserContext = Depends(require_permission("admin:view")),
+):
     """
     Request promotion of sandbox SQL. No execution or training occurs.
     """

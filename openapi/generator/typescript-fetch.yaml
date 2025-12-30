@@ -1,0 +1,29 @@
+generatorName: typescript-fetch
+inputSpec: ../fortress.yaml
+outputDir: ../../sdk/typescript
+additionalProperties:
+  npmName: "@easydata/fortress-sdk"
+  npmVersion: "16.7.9"
+  supportsES6: true
+  typescriptThreePlus: true
+  useSingleRequestParameter: true
+  withInterfaces: true
+  enumPropertyNaming: UPPERCASE
+  stringEnums: true
+  modelPropertyNaming: camelCase
+  paramNaming: camelCase
+  snapshot: false
+
+globalProperties:
+  models: true
+  apis: true
+  supportingFiles: false
+
+typeMappings:
+  DateTime: string
+
+importMappings:
+  NDJSONThinkingChunk: "./streaming"
+  NDJSONDataChunk: "./streaming"
+  NDJSONErrorChunk: "./streaming"
+  NDJSONEndChunk: "./streaming"

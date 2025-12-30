@@ -1,0 +1,183 @@
+extends:
+  - spectral:oas
+
+rules:
+
+  # =========================================================
+  # 1. Core OpenAPI Hygiene
+  # =========================================================
+
+  operation-id-required:
+    description: Every operation must define operationId
+    given: $.paths[*][*]
+    severity: error
+    then:
+      field: operationId
+      function: truthy
+
+  operation-summary-required:
+    description: Every operation must have a summary
+    given: $.paths[*][*]
+    severity: warn
+    then:
+      field: summary
+      function: truthy
+
+  no-duplicate-operation-ids:
+    description: operationId values must be unique
+    given: $.paths[*][*].operationId
+    severity: error
+    then:
+      function: unique
+
+  # =========================================================
+  # 2. Security & RBAC Enforcement
+  # =========================================================
+
+  x-permissions-required:
+    description: Every non-auth operation must declare x-permissions
+    given: $.paths[*][*]
+    severity: error
+    then:
+      function: truthy
+      field: x-permissions
+    except:
+      - $.paths['/auth/login'].post
+      - $.paths['/health'].get
+      - $.paths['/health/llm'].get
+
+  admin-routes-must-be-protected:
+    description: Admin routes must not be publicly accessible
+    given: $.paths['/admin*'][*]
+    severity: error
+    then:
+      field: x-permissions
+      function: truthy
+
+  # =========================================================
+  # 3. Stage 6 – Policy Binding Rules
+  # =========================================================
+
+  policy-bound-required-for-query:
+    description: Query and streaming endpoints must be policy-bound
+    given: $.paths['/ask'].post
+    severity: error
+    then:
+      field: x-policy-bound
+      function: truthy
+
+  policy-bound-required-for-chat:
+    description: Chat streaming must be policy-bound
+    given: $.paths['/chat/stream'].get
+    severity: error
+    then:
+      field: x-policy-bound
+      function: truthy
+
+  training-must-be-policy-bound:
+    description: Training endpoints must be policy-bound
+    given: $.paths['/training*'][*]
+    severity: error
+    then:
+      field: x-policy-bound
+      function: truthy
+
+  # =========================================================
+  # 4. Audit Guarantees
+  # =========================================================
+
+  audit-required-for-high-risk:
+    description: High-risk endpoints must require auditing
+    given: $.paths[*][*]
+    severity: error
+    then:
+      function: schema
+      schema:
+        if:
+          properties:
+            x-risk:
+              enum: [HIGH, CRITICAL]
+        then:
+          required: [x-audit-required]
+
+  # =========================================================
+  # 5. Streaming Contract Enforcement
+  # =========================================================
+
+  streaming-media-type-required:
+    description: Streaming endpoints must declare correct media types
+    given: $.paths['/ask'].post.responses['200'].content
+    severity: error
+    then:
+      function: truthy
+      field: application/x-ndjson
+
+  sse-media-type-required:
+    description: SSE endpoints must declare text/event-stream
+    given: $.paths['/chat/stream'].get.responses['200'].content
+    severity: error
+    then:
+      function: truthy
+      field: text/event-stream
+
+  streaming-must-use-oneOf:
+    description: Streaming responses must use oneOf chunk schemas
+    given: $.paths['/ask'].post.responses['200'].content.application/x-ndjson.schema
+    severity: error
+    then:
+      field: oneOf
+      function: truthy
+
+  # =========================================================
+  # 6. Error Contract Enforcement
+  # =========================================================
+
+  error-responses-must-use-errorresponse:
+    description: Error responses must reference ErrorResponse schema
+    given: $.paths[*][*].responses[?(@property.match(/^(4|5)\d\d$/))]
+    severity: warn
+    then:
+      function: schema
+      schema:
+        properties:
+          content:
+            properties:
+              application/json:
+                properties:
+                  schema:
+                    properties:
+                      $ref:
+                        pattern: errors.yaml#/ErrorResponse
+
+  # =========================================================
+  # 7. Forbidden Anti-Patterns
+  # =========================================================
+
+  no-inline-schemas-in-responses:
+    description: Responses must use $ref schemas (no inline objects)
+    given: $.paths[*][*].responses[*].content.application/json.schema
+    severity: warn
+    then:
+      function: schema
+      schema:
+        not:
+          required: [properties]
+
+  no-undeclared-admin-risk:
+    description: Admin endpoints must declare x-risk
+    given: $.paths['/admin*'][*]
+    severity: warn
+    then:
+      field: x-risk
+      function: truthy
+
+  # =========================================================
+  # 8. Versioning & Stability
+  # =========================================================
+
+  no-unversioned-training-paths:
+    description: Training paths must be versioned or explicitly approved
+    given: $.paths['/train*']
+    severity: warn
+    then:
+      function: falsy

@@ -1,0 +1,12 @@
+ErrorResponse:
+  type: object
+  required: [error_code, message]
+  properties:
+    error_code:
+      type: string
+      example: POLICY_VIOLATION
+    message:
+      type: string
+    details:
+      type: object
+      additionalProperties: true
