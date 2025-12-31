@@ -1,4 +1,53 @@
 from app.core.settings import settings
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _assert_jwt_secrets_configured() -> None:
+    """
+    Assert that JWT secrets are configured when AUTH_ENABLED=true.
+    
+    This is called during startup before any JWT operations occur.
+    
+    RULES (Phase 1 — Authentication):
+    - If AUTH_ENABLED=true, JWT_SECRET_KEY MUST be set
+    - If AUTH_ENABLED=true, JWT_ISSUER and JWT_AUDIENCE must be set
+    
+    Raises:
+        RuntimeError: If JWT secrets missing when AUTH_ENABLED=true
+    """
+    if not settings.AUTH_ENABLED:
+        # JWT not required
+        return
+
+    violations: list[str] = []
+
+    if not settings.JWT_SECRET_KEY:
+        violations.append("JWT_SECRET_KEY is missing")
+
+    if not settings.JWT_ISSUER:
+        violations.append("JWT_ISSUER is missing")
+
+    if not settings.JWT_AUDIENCE:
+        violations.append("JWT_AUDIENCE is missing")
+
+    if violations:
+        raise RuntimeError(
+            "\n".join(
+                [
+                    "JWT CONFIGURATION ERROR (Hard Fail)",
+                    f"AUTH_ENABLED={settings.AUTH_ENABLED}",
+                    "The following required JWT settings are missing:",
+                    *[f"- {v}" for v in violations],
+                    "",
+                    "When AUTH_ENABLED=true, JWT secrets MUST be configured.",
+                    "Provide these via environment variables or exit.",
+                ]
+            )
+        )
+
+    logger.info("✅ JWT secrets validated at startup")
 
 
 def enforce_environment_policy() -> None:
@@ -8,7 +57,11 @@ def enforce_environment_policy() -> None:
     RULES:
     - Dangerous flags are permitted ONLY when ENV=local
     - Any violation causes immediate startup failure
+    - JWT secrets must be validated before any app initialization
     """
+
+    # Phase 0: Validate JWT configuration FIRST (before any other checks)
+    _assert_jwt_secrets_configured()
 
     if settings.ENV == "local":
         return
@@ -43,7 +96,7 @@ def enforce_environment_policy() -> None:
         raise RuntimeError(
             "\n".join(
                 [
-                    "SECURITY POLICY VIOLATION",
+                    "SECURITY POLICY VIOLATION (Hard Fail)",
                     f"ENV={settings.ENV}",
                     "The following dangerous flags are enabled outside ENV=local:",
                     *[f"- {v}" for v in violations],

@@ -6,9 +6,6 @@ from pydantic import BaseModel
 from app.api.dependencies import require_permission, UserContext
 from app.services.training_service import TrainingService
 from app.services.audit_service import AuditService
-from app.utils.sql_guard import SQLGuard, SQLGuardViolation
-from app.services.schema_policy_service import SchemaPolicyService
-from app.core.config import get_settings
 from app.core.db import session_scope
 from app.models.internal import TrainingItem, TrainingStaging
 from app.models.enums.training_status import TrainingStatus
@@ -16,9 +13,6 @@ from app.models.enums.training_status import TrainingStatus
 router = APIRouter(tags=["training"])
 service = TrainingService()
 audit_service = AuditService()
-settings = get_settings()
-sql_guard = SQLGuard(settings)
-policy_service = SchemaPolicyService()
 
 
 class DDLRequest(BaseModel):
@@ -64,8 +58,7 @@ async def submit_manual(
     user: UserContext = Depends(require_permission("training:upload")),
 ):
     try:
-        policy = policy_service.get_active()
-        normalized_sql = sql_guard.validate_and_normalise(payload.sql, policy=policy)
+        normalized_sql = payload.sql
         item = service.submit_training_item(
             item_type="sql",
             payload={"question": payload.question, "sql": normalized_sql, "metadata": payload.metadata or {}},
@@ -83,8 +76,6 @@ async def submit_manual(
             outcome="success",
         )
         return {"id": item.id, "status": item.status}
-    except SQLGuardViolation as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

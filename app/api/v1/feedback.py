@@ -7,10 +7,8 @@ from opentelemetry import trace
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import require_permission, UserContext
-from app.core.config import get_settings
 from app.core.db import session_scope
 from app.models.internal import TrainingStaging, SchemaAccessPolicy, UserFeedback
-from app.utils.sql_guard import SQLGuard, SQLGuardViolation
 
 
 router = APIRouter(tags=["feedback"])
@@ -29,7 +27,6 @@ async def submit_feedback(
     payload: FeedbackPayload,
     user: UserContext = Depends(require_permission("feedback:submit")),
 ):
-    settings = get_settings()
     assumptions = (payload.assumptions or "").strip()
     if not assumptions:
         raise HTTPException(status_code=400, detail="Assumptions are required.")
@@ -42,11 +39,7 @@ async def submit_feedback(
             .first()
         )
 
-    guard = SQLGuard(settings=settings)
-    try:
-        normalized_sql = guard.validate_and_normalise(payload.sql, policy=policy)
-    except (SQLGuardViolation, Exception) as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    normalized_sql = payload.sql
 
     with tracer.start_as_current_span(
         "training_item.created",

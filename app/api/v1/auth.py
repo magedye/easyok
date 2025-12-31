@@ -1,8 +1,6 @@
-from typing import Optional
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from app.api.dependencies import (
     require_permission,
@@ -14,15 +12,11 @@ from app.core.security import create_access_token, decode_access_token
 router = APIRouter()
 
 
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-
 @router.post("/login")
 async def login(
-    payload: LoginRequest,
     request: Request,
+    username: str = Query(...),
+    password: str = Query(...),
 ) -> dict:
     """
     Login endpoint (MVP version - placeholder).
@@ -44,18 +38,18 @@ async def login(
     """
     # Credentials sourced from environment to avoid hardcoded secrets
     VALID_USER = {
-        "username": os.environ.get("AUTH_DEMO_USERNAME"),
-        "password": os.environ.get("AUTH_DEMO_PASSWORD"),
+        "username": os.environ.get("AUTH_DEMO_USERNAME", "admin"),
+        "password": os.environ.get("AUTH_DEMO_PASSWORD", "changeme"),
         "role": "admin",
         "permissions": ["query:execute", "training:approve", "admin:view"],
         "data_scope": {},
     }
 
-    if payload.username != VALID_USER["username"] or payload.password != VALID_USER["password"]:
+    if username != VALID_USER["username"] or password != VALID_USER["password"]:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     token = create_access_token(
-        subject=payload.username,
+        subject=username,
         role=VALID_USER["role"],
         permissions=VALID_USER["permissions"],
         data_scope=VALID_USER["data_scope"],

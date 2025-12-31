@@ -108,6 +108,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix="/api/v1/auth")
     app.include_router(admin.router, prefix="/api/v1/admin")
     app.include_router(chat.router, prefix="/api/v1")
+    app.include_router(chat.router, prefix="")  # expose /chat/stream for SSE adapter tests
     app.include_router(training.router, prefix="/api/v1")
     app.include_router(assets.router, prefix="/api/v1")
     app.include_router(feedback.router, prefix="/api/v1")

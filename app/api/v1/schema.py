@@ -3,21 +3,17 @@ from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.dependencies import require_permission, UserContext
-from app.services.schema_policy_service import SchemaPolicyService
 from app.services.vanna_service import VannaService
 from app.services.audit_service import AuditService
 from app.services.schema_connection_service import SchemaConnectionService
 from app.core.exceptions import AppException
 from app.core.config import get_settings
-from app.utils.sql_guard import SQLGuard, SQLGuardViolation
 
 router = APIRouter(tags=["schema"])
-policy_service = SchemaPolicyService()
 vanna = VannaService()
 audit_service = AuditService()
 connection_service = SchemaConnectionService()
 settings = get_settings()
-sql_guard = SQLGuard(settings)
 
 
 @router.get("/schema/discover")
@@ -148,9 +144,7 @@ async def sample_table(
     row_cap = min(limit or 20, settings.DEFAULT_ROW_LIMIT)
     try:
         sql = f"SELECT * FROM {tbl} FETCH FIRST {row_cap} ROWS ONLY"
-        policy = policy_service.get_active()
-        normalized_sql = sql_guard.validate_and_normalise(sql, policy=policy)
-        rows = vanna.db.execute(normalized_sql)
+        rows = vanna.db.execute(sql)
         audit_service.log(
             user_id=user.get("user_id", "anonymous"),
             role=user.get("role", "guest"),
@@ -160,8 +154,6 @@ async def sample_table(
             outcome="success",
         )
         return {"rows": rows or [], "row_count": len(rows or [])}
-    except SQLGuardViolation as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
     except AppException as exc:
         raise exc
     except Exception as exc:
@@ -278,18 +270,7 @@ async def create_policy_draft(
     payload: Dict[str, Any],
     user: UserContext = Depends(require_permission("schema.policy")),
 ):
-    try:
-        policy = policy_service.create_draft(
-            db_connection_id=payload.get("db_connection_id"),
-            schema_name=(payload.get("schema_name") or "").upper(),
-            allowed_tables=payload.get("allowed_tables") or [],
-            allowed_columns=payload.get("allowed_columns") or {},
-            denied_tables=payload.get("denied_tables") or [],
-            created_by=user.get("user_id"),
-        )
-        return {"id": policy.id, "status": policy.status}
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    raise HTTPException(status_code=503, detail="Schema policy management disabled at API adapter")
 
 
 def _policy_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -348,28 +329,7 @@ async def policy_wizard_commit(
     user: UserContext = Depends(require_permission("schema.policy")),
 ):
     """Commit a draft policy for later activation."""
-    try:
-        policy = policy_service.create_draft(
-            db_connection_id=payload.get("connection_id") or payload.get("connectionId"),
-            schema_name=(payload.get("schema_name") or payload.get("schemaName") or "").upper(),
-            allowed_tables=payload.get("allowed_tables") or payload.get("allowedTables") or [],
-            allowed_columns=payload.get("allowed_columns") or payload.get("allowedColumns") or {},
-            denied_tables=payload.get("denied_tables") or payload.get("deniedTables") or [],
-            excluded_tables=payload.get("denied_tables") or payload.get("deniedTables") or [],
-            excluded_columns=payload.get("denied_columns") or payload.get("deniedColumns") or {},
-            created_by=user.get("user_id"),
-        )
-        audit_service.log(
-            user_id=user.get("user_id", "anonymous"),
-            role=user.get("role", "guest"),
-            action="policy_wizard_commit",
-            resource_id=policy.id,
-            payload={"schema": policy.schema_name, "connection_id": policy.db_connection_id},
-            outcome="success",
-        )
-        return _policy_to_dict(policy)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    raise HTTPException(status_code=503, detail="Schema policy management disabled at API adapter")
 
 
 @router.patch("/schema/policy/{policy_id}")
@@ -378,16 +338,7 @@ async def update_policy_draft(
     payload: Dict[str, Any],
     user: UserContext = Depends(require_permission("schema.policy")),
 ):
-    try:
-        policy = policy_service.update_draft(
-            policy_id,
-            allowed_tables=payload.get("allowed_tables"),
-            allowed_columns=payload.get("allowed_columns"),
-            denied_tables=payload.get("denied_tables"),
-        )
-        return {"id": policy.id, "status": policy.status}
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    raise HTTPException(status_code=503, detail="Schema policy management disabled at API adapter")
 
 
 @router.post("/schema/policy/{policy_id}/activate")
@@ -395,11 +346,7 @@ async def activate_policy(
     policy_id: str,
     user: UserContext = Depends(require_permission("schema.policy.activate")),
 ):
-    try:
-        policy = policy_service.activate(policy_id, approver=user.get("user_id"))
-        return {"id": policy.id, "status": policy.status}
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    raise HTTPException(status_code=503, detail="Schema policy management disabled at API adapter")
 
 
 @router.post("/schema/policy/commit")
@@ -410,16 +357,4 @@ async def commit_policy(
     """
     Commit a schema policy version (admin-only). No training side effects.
     """
-    try:
-        policy = policy_service.commit_policy(
-            db_connection_id=payload.get("db_connection_id"),
-            schema_name=(payload.get("schema_name") or "").upper(),
-            allowed_tables=payload.get("allowed_tables") or [],
-            allowed_columns=payload.get("allowed_columns") or {},
-            excluded_tables=payload.get("excluded_tables") or [],
-            excluded_columns=payload.get("excluded_columns") or {},
-            created_by=user.get("user_id"),
-        )
-        return {"id": policy.id, "status": policy.status, "version": policy.version}
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    raise HTTPException(status_code=503, detail="Schema policy management disabled at API adapter")

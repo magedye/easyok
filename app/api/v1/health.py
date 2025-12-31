@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from app.services.health_service import HealthService
 from app.services.observability_service import ObservabilityService
 
-router = APIRouter(prefix="/health", tags=["health"]) 
+router = APIRouter(prefix="/health", tags=["health"])
 
 
 @router.get("/llm")

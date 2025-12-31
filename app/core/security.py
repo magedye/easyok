@@ -1,3 +1,13 @@
+"""
+JWT Token Management
+
+GOVERNANCE COMPLIANCE (Phase 1 — Authentication):
+- JWT operations ONLY occur after startup guards validate secrets
+- See app/core/policy_guard.py for validation logic
+- No global JWT managers at import time
+- All JWT operations call get_settings(force_reload=True) to get fresh config
+"""
+
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
@@ -14,6 +24,9 @@ def create_access_token(
     """
     Create a JWT access token.
     
+    NOTE: JWT secret validation is enforced at startup via policy_guard.
+    This function assumes all JWT configuration is valid.
+    
     Args:
         subject: User ID (sub claim)
         role: User role (default: "user")
@@ -23,9 +36,19 @@ def create_access_token(
     
     Returns:
         Encoded JWT token
+    
+    Raises:
+        ValueError: If JWT is not properly configured (should not happen at runtime)
     """
     
     settings = get_settings(force_reload=True)
+    
+    # Defensive check: JWT secrets must be configured
+    if not settings.JWT_SECRET_KEY:
+        raise ValueError(
+            "JWT_SECRET_KEY is not configured. "
+            "This should have been caught at startup by policy_guard."
+        )
 
     if expires_delta is None:
         expires_delta = timedelta(minutes=settings.JWT_EXPIRATION_MINUTES)
@@ -53,6 +76,9 @@ def decode_access_token(token: str) -> Dict[str, Any]:
     """
     Decode and verify a JWT access token.
     
+    NOTE: JWT secret validation is enforced at startup via policy_guard.
+    This function assumes all JWT configuration is valid.
+    
     Args:
         token: JWT token string
     
@@ -61,9 +87,17 @@ def decode_access_token(token: str) -> Dict[str, Any]:
     
     Raises:
         JWTError: If token is invalid or expired
+        ValueError: If JWT is not properly configured (should not happen at runtime)
     """
     
     settings = get_settings(force_reload=True)
+
+    # Defensive check: JWT secrets must be configured
+    if not settings.JWT_SECRET_KEY:
+        raise ValueError(
+            "JWT_SECRET_KEY is not configured. "
+            "This should have been caught at startup by policy_guard."
+        )
 
     try:
         payload = jwt.decode(

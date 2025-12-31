@@ -5,27 +5,22 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from app.api.dependencies import optional_auth, UserContext, require_permission
+from app.api.dependencies import UserContext, require_permission
 from app.core.config import get_settings
 from app.models.request import QueryRequest
 from app.services.orchestration_service import OrchestrationService
 from app.services.audit_service import AuditService
 from app.services.factory import ServiceFactory
 from app.core.exceptions import InvalidQueryError
-from app.services.schema_policy_service import SchemaPolicyService
 from app.models.enums.confidence_tier import ConfidenceTier
-from app.utils.sql_guard import SQLGuard, SQLGuardViolation
 from opentelemetry import trace
-from opentelemetry.trace import SpanKind, Status, StatusCode
+from opentelemetry.trace import SpanKind
 import hashlib
 
 router = APIRouter(tags=["query"])
 orchestration_service = OrchestrationService()
-settings = get_settings()
 audit_service = AuditService()
-policy_service = SchemaPolicyService()
 tracer = trace.get_tracer(__name__)
-sql_guard = SQLGuard(settings)
 
 
 def _ts() -> str:
@@ -64,6 +59,9 @@ async def ask(
     Returns:
         Query result with optional RLS filtering
     """
+    settings = get_settings(force_reload=True)
+    if settings.AUTH_ENABLED and not user.get("is_authenticated"):
+        raise HTTPException(status_code=401, detail="Authentication required")
     if settings.STREAM_PROTOCOL != "ndjson":
         raise HTTPException(status_code=404, detail="NDJSON stream disabled")
 
@@ -95,6 +93,8 @@ async def ask(
             },
         ):
             try:
+                schema_version = None
+                policy_version = None
                 thinking_ts = _ts()
                 yield _chunk(
                     "thinking",
@@ -117,19 +117,10 @@ async def ask(
                     outcome="started",
                 )
 
-                policy = policy_service.get_active()
-                policy_version = policy.version if policy else None
-                schema_version = policy.schema_name if policy else None
-
                 with tracer.start_as_current_span(
                     "sql.generate",
                     attributes={
-                        "llm.provider": getattr(settings, "LLM_PROVIDER", ""),
-                        "llm.model": getattr(settings, "OPENAI_MODEL", ""),
-                        "llm.temperature": 0.1,
                         "question": q_text,
-                        "schema.version": schema_version,
-                        "policy.version": policy_version,
                     },
                 ):
                     technical_view = await orchestration_service.prepare(
@@ -140,53 +131,8 @@ async def ask(
 
                 sql_text = technical_view.get("sql", "")
                 sql_hash = hashlib.sha256(sql_text.encode("utf-8")).hexdigest() if sql_text else ""
-
-                with tracer.start_as_current_span(
-                    "sql.validate",
-                    attributes={
-                        "question": q_text,
-                        "schema.version": schema_version,
-                        "policy.version": policy_version,
-                        "sql.hash": sql_hash,
-                        "sql.dialect": "oracle",
-                    },
-                ):
-                    try:
-                        policy = policy_service.get_active()
-                        sql_text = sql_guard.validate_and_normalise(sql_text, policy=policy)
-                        technical_view["sql"] = sql_text
-                        technical_view["is_safe"] = True
-                    except SQLGuardViolation as exc:
-                        audit_service.log(
-                            user_id=user.get("user_id", "anonymous"),
-                            role=user.get("role", "guest"),
-                            action="policy_blocked_query",
-                            resource_id=None,
-                            payload={"question": q_text, "reason": str(exc)},
-                            question=q_text,
-                            sql=sql_text,
-                            status="blocked",
-                            outcome="failed",
-                            error_message=str(exc),
-                        )
-                        yield _chunk(
-                            "error",
-                            {
-                                "message": "Access to forbidden table or column / تم حظر الاستعلام لاعتبارات السياسة",
-                                "error_code": "POLICY_VIOLATION",
-                            },
-                            trace_id=trace_id,
-                            tier=ConfidenceTier.TIER_0_FORTRESS,
-                            ts=_ts(),
-                        )
-                        yield _chunk(
-                            "end",
-                            {"status": "failed", "chunks": chunk_count + 1},
-                            trace_id=trace_id,
-                            tier=ConfidenceTier.TIER_0_FORTRESS,
-                            ts=_ts(),
-                        )
-                        return
+                tier_value = technical_view.get("confidence_tier", ConfidenceTier.TIER_0_FORTRESS.value)
+                tier = ConfidenceTier(tier_value)
 
                 audit_service.log(
                     user_id=user.get("user_id", "anonymous"),
@@ -200,12 +146,31 @@ async def ask(
                     outcome="success",
                 )
 
-                tier = technical_view.get("confidence_tier", ConfidenceTier.TIER_0_FORTRESS.value)
+                if not technical_view.get("is_safe") or not sql_text:
+                    yield _chunk(
+                        "error",
+                        {
+                            "message": technical_view.get("error", "SQL generation failed"),
+                            "error_code": technical_view.get("error_code", "invalid_query"),
+                        },
+                        trace_id=trace_id,
+                        tier=ConfidenceTier.TIER_0_FORTRESS,
+                        ts=_ts(),
+                    )
+                    yield _chunk(
+                        "end",
+                        {"status": "failed", "chunks": chunk_count + 1},
+                        trace_id=trace_id,
+                        tier=ConfidenceTier.TIER_0_FORTRESS,
+                        ts=_ts(),
+                    )
+                    return
+
                 yield _chunk(
                     "technical_view",
                     technical_view,
                     trace_id=trace_id,
-                    tier=ConfidenceTier(tier),
+                    tier=tier,
                     ts=_ts(),
                 )
                 chunk_count += 1
@@ -219,23 +184,6 @@ async def ask(
                         ts=_ts(),
                     )
                     chunk_count += 1
-
-                if not technical_view.get("is_safe", False):
-                    yield _chunk(
-                        "error",
-                        {"message": "SQL rejected by guard", "error_code": "invalid_query"},
-                        trace_id=trace_id,
-                        tier=ConfidenceTier(tier),
-                        ts=_ts(),
-                    )
-                    yield _chunk(
-                        "end",
-                        {"status": "failed", "chunks": chunk_count},
-                        trace_id=trace_id,
-                        tier=ConfidenceTier(tier),
-                        ts=_ts(),
-                    )
-                    return
 
                 with tracer.start_as_current_span(
                     "db.query.execute",
@@ -293,9 +241,6 @@ async def ask(
                         "stream.technical_view",
                         attributes={
                             "question": q_text,
-                            "schema.version": schema_version,
-                            "policy.version": policy_version,
-                            "sql.hash": sql_hash,
                         },
                     ):
                         pass
@@ -304,8 +249,6 @@ async def ask(
                         "stream.data",
                         attributes={
                             "question": q_text,
-                            "schema.version": schema_version,
-                            "policy.version": policy_version,
                         },
                     ):
                         yield _chunk(
@@ -335,9 +278,9 @@ async def ask(
                             "business_view",
                             {"chart": chart_payload, "summary": summary_payload},
                             trace_id=trace_id,
-                        tier=ConfidenceTier.TIER_1_LAB,
-                        ts=_ts(),
-                    )
+                            tier=ConfidenceTier.TIER_1_LAB,
+                            ts=_ts(),
+                        )
                     chunk_count += 1
 
                     yield _chunk(

@@ -1,5 +1,15 @@
+"""
+FastAPI Dependency Injection for Authentication & Authorization
+
+GOVERNANCE COMPLIANCE (Phase 1 & 2):
+- Authentication: JWT validation when AUTH_ENABLED=true
+- Authorization: RBAC with wildcard semantics when RBAC_ENABLED=true
+- Wildcard semantics: "admin:*" matches "admin:read", "admin:write", etc.
+- Both ":" and "." separators are equivalent (aliased)
+"""
+
 from fastapi import Depends, HTTPException, Request, status
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from app.core.config import get_settings
 from app.core.security import decode_access_token
 
@@ -187,15 +197,63 @@ async def get_current_user(user: UserContext = Depends(optional_auth)) -> UserCo
 # Permission Checking (RBAC with Toggle)
 # ============================================================================
 
+def _check_permission_with_wildcards(required: str, user_perms: List[str]) -> bool:
+    """
+    Check if user has required permission, handling wildcard semantics.
+    
+    Rules:
+    1. Exact match: if "admin:read" is required and user has "admin:read" → allow
+    2. Wildcard match: if "admin:read" is required and user has "admin:*" → allow
+    3. Alias handling: both ":" and "." separators are equivalent
+    
+    Args:
+        required: Required permission (e.g., "admin:read", "admin.read")
+        user_perms: List of user permissions
+        
+    Returns:
+        True if user has permission, False otherwise
+    """
+    # Normalize required permission to both forms
+    required_colon = required.replace(".", ":")
+    required_dot = required.replace(":", ".")
+    required_forms = {required_colon, required_dot}
+    
+    for user_perm in user_perms:
+        # Normalize user permission to both forms
+        user_perm_colon = user_perm.replace(".", ":")
+        user_perm_dot = user_perm.replace(":", ".")
+        
+        # Exact match (with alias handling)
+        if user_perm_colon in required_forms or user_perm_dot in required_forms:
+            return True
+        
+        # Wildcard match: check if user has "namespace:*" permission
+        # e.g., user has "admin:*", required is "admin:read"
+        if user_perm_colon.endswith(":*"):
+            namespace = user_perm_colon[:-2]  # Remove ":*"
+            if required_colon.startswith(namespace + ":"):
+                return True
+        
+        if user_perm_dot.endswith(".*"):
+            namespace = user_perm_dot[:-2]  # Remove ".*"
+            if required_dot.startswith(namespace + "."):
+                return True
+    
+    return False
+
+
 def require_permission(permission: str):
     """
     Permission dependency (RBAC).
     
-    Checks if user has required permission.
-    If RBAC_ENABLED=false, allows all users.
+    GOVERNANCE (Phase 2 — Authorization):
+    Checks if user has required permission with proper wildcard semantics.
+    - "admin:*" grants access to all "admin:*" sub-permissions
+    - Both ":" and "." separators are equivalent (aliased)
+    - If RBAC_ENABLED=false, allows all users
     
     Args:
-        permission: Required permission string (e.g., "training:approve")
+        permission: Required permission string (e.g., "training:approve", "admin.read")
     
     Returns:
         Dependency function
@@ -210,14 +268,10 @@ def require_permission(permission: str):
         if not settings.RBAC_ENABLED:
             return user
         
-        # 🔐 RBAC Enabled → Check Permission (accept dot/colon aliases)
+        # 🔐 RBAC Enabled → Check Permission with wildcard support
         perms = user["permissions"]
-        aliases = {permission}
-        if ":" in permission:
-            aliases.add(permission.replace(":", "."))
-        if "." in permission:
-            aliases.add(permission.replace(".", ":"))
-        if not any(p in perms for p in aliases):
+        
+        if not _check_permission_with_wildcards(permission, perms):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Missing required permission: {permission}",

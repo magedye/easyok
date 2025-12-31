@@ -83,7 +83,7 @@ async def change_feature_toggle(request: FeatureToggleRequest) -> FeatureToggleR
     Change a runtime-toggleable feature.
     
     Admin role required.
-    Immutable toggles (AUTH, RBAC, RLS, SQLGuard, AUDIT) cannot be changed.
+    Immutable toggles (AUTH, RBAC, RLS, AUDIT) cannot be changed.
     Reason mandatory.
     Every change is audited + OTel span.
     """

@@ -69,7 +69,7 @@ Minimal valid stream: thinking → end (no technical/data/business chunks).
 def ndjson_sample_error():
     """
     Canonical ERROR flow.
-    Compliant with Phase 4 Contract: Nested error payload, Fail-Closed status.
+    Compliant with Phase 4 Contract: Flat error payload, Fail-Closed status.
     """
     return [
         json.dumps({
@@ -81,14 +81,12 @@ def ndjson_sample_error():
             }
         }),
         json.dumps({
-            "type": "error", 
-            "trace_id": "t2", 
+            "type": "error",
+            "trace_id": "t2",
             "timestamp": "2025-01-01T00:00:00Z",
-            "payload": {
-                "error_code": "POLICY_VIOLATION", 
-                "message": "forbidden", 
-                "details": {"reason": "access_denied"}
-            }
+            "error_code": "POLICY_VIOLATION",
+            "message": "forbidden",
+            "lang": "en"
         }),
         json.dumps({
             "type": "end", 
