@@ -10,6 +10,11 @@ export type TechnicalViewPayload = {
   is_safe: boolean;
 };
 
+export type ThinkingPayload = {
+  content?: string;
+  step?: string;
+};
+
 export type DataPayload =
   | Array<Record<string, unknown>>
   | {
@@ -30,14 +35,22 @@ export type SummaryPayload = string | { text: string; metrics?: Record<string, u
 export type ErrorPayload = {
   message: string;
   error_code: string;
+  details?: Record<string, unknown>;
+};
+
+export type EndPayload = {
+  message?: string;
+  total_chunks?: number;
 };
 
 export type AskChunk =
-  | { type: 'technical_view'; payload: TechnicalViewPayload }
-  | { type: 'data'; payload: DataPayload }
-  | { type: 'chart'; payload: ChartPayload }
-  | { type: 'summary'; payload: SummaryPayload }
-  | { type: 'error'; payload: ErrorPayload };
+  | { type: 'thinking'; trace_id?: string; payload: ThinkingPayload }
+  | { type: 'technical_view'; trace_id?: string; payload: TechnicalViewPayload }
+  | { type: 'data'; trace_id?: string; payload: DataPayload }
+  | { type: 'chart'; trace_id?: string; payload: ChartPayload }
+  | { type: 'summary'; trace_id?: string; payload: SummaryPayload }
+  | { type: 'error'; trace_id?: string; payload: ErrorPayload }
+  | { type: 'end'; trace_id?: string; payload: EndPayload };
 
 export type FeedbackPayload = {
   audit_id: number;

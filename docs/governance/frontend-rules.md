@@ -1,602 +1,746 @@
-# Frontend Governance Rules — Hard Constraints
+# Frontend Governance Rules
 
-**Audience:** Frontend Engineers & Architects  
-**Status:** BINDING (Architectural Enforcement)  
-**Violations:** Block all PRs; escalate to architecture review
+**Target Audience:** Frontend Developers, Code Reviewers, CI Systems  
+**Last Updated:** 2025-12-31  
+**Version:** Phase 4 Documentation  
 
----
+## 📋 Overview
 
-## Executive Mandate
+This document defines the 10 hard governance rules that the frontend MUST follow to maintain security, compliance, and architectural integrity. These rules are enforced through the **[`GovernanceValidator`](../frontend/src/utils/governanceValidator.ts:188)** and CI pipeline.
 
-**The Frontend is a visibility window, NOT a source of authority.**
+## 🎯 Governance Philosophy
 
-Frontend provides:
-- ✅ **Display** — Show data returned from backend
-- ✅ **Control** — Trigger backend operations
-- ✅ **Navigation** — Help users find features
+1. **Backend Authority:** Backend makes all security and data decisions
+2. **Frontend Simplicity:** UI layer focuses purely on presentation
+3. **Contract Compliance:** Strict adherence to API specifications
+4. **Zero Trust:** Never assume backend behavior or permissions
+5. **Audit Trail:** All rule violations must be documented and justified
 
-Frontend does NOT provide:
-- ❌ **Business Logic** — No SQL interpretation, policy logic, or assumptions
-- ❌ **Security Enforcement** — No auth/permission checks (backend decides)
-- ❌ **Data Transformation** — No filtering, sorting (if backend should do it)
-- ❌ **Secret Storage** — No tokens, API keys in localStorage beyond lifetime
-- ❌ **Inference** — No guessing about backend behavior
+## ⚖️ The 10 Hard Rules
 
----
+### Rule #1: No SQL Generation or Interpretation
+**Foundation:** Frontend is a presentation layer, not a data layer
 
-## Hard Rules (MUST)
-
-### Rule 1: No SQL Generation or Interpretation
-
-**Forbidden:**
+#### ❌ VIOLATIONS
 ```typescript
-// ❌ FORBIDDEN: Don't generate SQL
-const sql = `SELECT * FROM ${tableName} WHERE ${column} = '${value}'`;
+// Direct SQL generation
+const sql = `SELECT * FROM ${tableName} WHERE id = ${userId}`;
 
-// ❌ FORBIDDEN: Don't parse SQL
-const columns = sql.match(/SELECT (.+?) FROM/)[1].split(',');
+// SQL parsing/modification
+const modifiedSql = originalSql.replace('SELECT *', 'SELECT id, name');
 
-// ❌ FORBIDDEN: Don't validate SQL syntax
-if (!sql.startsWith('SELECT')) throw new Error('Must be SELECT');
-```
-
-**Allowed:**
-```typescript
-// ✅ ALLOWED: Display SQL returned by backend
-<CodeBlock>{technicalView.sql}</CodeBlock>
-
-// ✅ ALLOWED: Show SQL to user for feedback
-<CopyButton text={technicalView.sql} />
-
-// ✅ ALLOWED: Let user copy/export SQL
-export function exportSQL(sql: string) {
-  clipboard.copy(sql);
+// SQL validation
+if (sql.includes('DROP TABLE')) {
+  throw new Error('Dangerous SQL detected');
 }
+
+// Query building
+const query = queryBuilder.select('*').from('users').where('id', userId);
 ```
 
-**Rationale:** Backend owns SQL generation (via LLM), validation (via SQLGuard), and execution (via DB driver).
-
----
-
-### Rule 2: No Permission Inference
-
-**Forbidden:**
+#### ✅ ALLOWED PATTERNS
 ```typescript
-// ❌ FORBIDDEN: Check if table is in allowed list locally
-const canQueryTable = (table) => {
-  const allowedTables = ['users', 'orders']; // Where does this come from?
-  return allowedTables.includes(table);
+// Read-only display of backend-provided SQL
+<pre className="sql-display">
+  <code>{technicalViewChunk.payload.sql}</code>
+</pre>
+
+// Copy to clipboard
+const copySqlToClipboard = () => {
+  navigator.clipboard.writeText(sqlFromBackend);
 };
 
-// ❌ FORBIDDEN: Hide buttons based on local permission state
-if (userRoles.includes('admin')) {
-  showAdminPanel();
-}
-
-// ❌ FORBIDDEN: Assume permissions based on user ID
-if (user.id === 1) {
-  grantFullAccess();
-}
+// Syntax highlighting (display only)
+<SyntaxHighlighter language="sql" style={theme}>
+  {sqlFromBackend}
+</SyntaxHighlighter>
 ```
 
-**Allowed:**
+#### 🔧 ENFORCEMENT
 ```typescript
-// ✅ ALLOWED: Display permissions from backend
-const { permissions } = await fetch('/api/v1/auth/me').then(r => r.json());
-userPermissions.value = permissions;
-
-// ✅ ALLOWED: Show UI conditionally based on backend response
-const showAdminUI = permissions.includes('admin.settings.write');
-
-// ✅ ALLOWED: Let backend reject if permission missing
-try {
-  await toggleFeature(featureName);
-} catch (error) {
-  if (error.error_code === 'FORBIDDEN') {
-    showError('You do not have permission');
-  }
-}
+// GovernanceValidator pattern detection
+/(?:SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER)\s+/gi
+/sql\s*=\s*["`'].*["`']/gi
 ```
 
-**Rationale:** Backend is authoritative on access control. Frontend just mirrors backend state.
+#### 📝 OVERRIDE MECHANISM
+```typescript
+/**
+ * @governance-ignore-next-line rule=no-sql-generation reason="Display only with syntax highlighting"
+ * @approved_by="lead-developer" expires="2024-12-31"
+ */
+<SyntaxHighlighter language="sql">{sql}</SyntaxHighlighter>
+```
 
 ---
 
-### Rule 3: No RLS (Row-Level Security) Logic
+### Rule #2: No Permission Inference
+**Foundation:** Only backend knows user permissions and access levels
 
-**Forbidden:**
+#### ❌ VIOLATIONS
 ```typescript
-// ❌ FORBIDDEN: Filter rows based on local logic
-const filteredRows = data.filter(row => {
-  return row.tenant_id === currentUser.tenantId;
-});
+// Role-based UI decisions
+if (user.role === 'admin') {
+  showAdminPanel = true;
+}
 
-// ❌ FORBIDDEN: Inject WHERE clause for RLS
-const baseSQL = 'SELECT * FROM orders';
-const withRLS = `${baseSQL} WHERE tenant_id = ${currentUser.tenantId}`;
+// Permission checking
+const canAccess = hasPermission(user, 'READ_SENSITIVE_DATA');
+
+// Local access control
+const isAuthorized = checkUserAccess(resource, action);
+
+// Department-based filtering
+if (user.department !== 'HR') {
+  filteredData = data.filter(item => item.department === user.department);
+}
 ```
 
-**Allowed:**
+#### ✅ ALLOWED PATTERNS
 ```typescript
-// ✅ ALLOWED: Display rows returned by backend
-// Backend already filtered via RLS (configured in DB driver)
-<DataTable columns={data.columns} rows={data.rows} />
+// Backend-driven feature flags
+const canAccessAdmin = useFeatureFlag('RBAC_ENABLED');
 
-// ✅ ALLOWED: Request data with context
-const response = await ask({
-  question: 'Show my orders',
-  context: { tenant_id: currentUser.tenantId } // Pass to backend
-});
+// Backend error handling
+if (error.error_code === 'FORBIDDEN') {
+  showAccessDeniedMessage();
+}
+
+// Backend response-based UI
+if (response.status === 403) {
+  return <InsufficientPermissions />;
+}
 ```
 
-**Rationale:** Row-level filtering must happen in the database (RLS), not client-side. Otherwise data leaks via API inspection.
+#### 🔧 ENFORCEMENT
+```typescript
+/(?:hasPermission|checkPermission|canAccess|isAllowed|authorize)/gi
+/role\s*===?\s*["`']admin["`']/gi
+```
 
 ---
 
-### Rule 4: No Semantic Cache Logic
+### Rule #3: No Row-Level Security (RLS) Logic
+**Foundation:** Backend handles all data filtering and security policies
 
-**Forbidden:**
+#### ❌ VIOLATIONS  
 ```typescript
-// ❌ FORBIDDEN: Implement cache yourself
-const cache = new Map();
-const cacheKey = md5(question);
-if (cache.has(cacheKey)) {
-  return cache.get(cacheKey); // Might be stale!
-}
+// Client-side data filtering
+const userRows = allData.filter(row => row.user_id === currentUser.id);
 
-// ❌ FORBIDDEN: Check if question is "similar" to previous
-if (similarity(newQuestion, lastQuestion) > 0.9) {
-  return lastResult; // Wrong! Policy version changed?
-}
-```
+// Tenant isolation
+const tenantData = data.filter(item => item.tenant_id === user.tenant_id);
 
-**Allowed:**
-```typescript
-// ✅ ALLOWED: Let backend handle caching
-const response = await ask({ question });
-
-// ✅ ALLOWED: Check if response was cached
-if (response.headers.get('X-Cache') === 'HIT') {
-  showNotice('This result is from cache (may not be current)');
-}
-
-// ✅ ALLOWED: Clear local UI cache if needed
-if (policyUpdated) {
-  localStorage.removeItem('last_query_result');
-}
-```
-
-**Rationale:** Semantic cache must revalidate against **current policy version** (backend does this). Frontend cannot know if policy changed.
-
----
-
-### Rule 5: No Assumption Inference
-
-**Forbidden:**
-```typescript
-// ❌ FORBIDDEN: Guess assumptions
-const assumptions = [
-  'Column created_at exists',
-  'Table has active status',
-  'No deleted records are included'
-];
-
-// ❌ FORBIDDEN: Validate assumptions without backend
-if (!assumptions.some(a => a.includes('created_at'))) {
-  warnUser('Missing temporal data');
-}
-
-// ❌ FORBIDDEN: Auto-correct assumptions
-const correctedAssumptions = assumptions.map(a =>
-  a.replace('created_at', 'CreatedDate') // Wrong table!
+// Department filtering
+const accessibleRows = rows.filter(row => 
+  user.departments.includes(row.department)
 );
+
+// Security-based hiding
+const sanitizedData = data.map(row => {
+  if (user.clearanceLevel < 3) {
+    delete row.ssn;
+    delete row.salary;
+  }
+  return row;
+});
 ```
 
-**Allowed:**
+#### ✅ ALLOWED PATTERNS
 ```typescript
-// ✅ ALLOWED: Display assumptions from backend
-const { assumptions } = technicalView;
-assumptions.forEach(assumption => {
-  <AssumptionCard>{assumption}</AssumptionCard>
-});
+// Display all backend-provided data
+<DataTable rows={dataFromBackend} />
 
-// ✅ ALLOWED: Let user mark assumptions as wrong
-<button onClick={() => markIncorrect(assumption)}>
-  This assumption is wrong
-</button>
+// Handle backend access errors
+if (error.error_code === 'TABLE_ACCESS_DENIED') {
+  return <AccessDeniedMessage table={error.details.table} />;
+}
 
-// ✅ ALLOWED: Show assumptions in feedback
-submitFeedback({
-  trace_id,
-  incorrect_assumptions: [assumption]
-});
+// Show backend-filtered results
+const filteredResults = await fetchFilteredData(query);
 ```
 
-**Rationale:** Assumptions come from backend (LLM + RAG). Frontend just displays them for user validation.
+#### 🔧 ENFORCEMENT
+```typescript
+/(?:row.+level|RLS|tenant.+filter|data.+filter)/gi
+```
 
 ---
 
-### Rule 6: No Token/Secret Storage Beyond Request Lifetime
+### Rule #4: No Custom Caching Logic
+**Foundation:** Caching must follow documented backend strategy
 
-**Forbidden:**
+#### ❌ VIOLATIONS
 ```typescript
-// ❌ FORBIDDEN: Store token indefinitely
-localStorage.setItem('token', jwt);
+// Manual localStorage caching
+localStorage.setItem(`query_${queryHash}`, JSON.stringify(results));
 
-// ❌ FORBIDDEN: Store sensitive data in localStorage
+// Custom cache implementation
+const cache = new Map<string, QueryResult>();
+cache.set(queryKey, result);
+
+// Local data persistence
+const savedQuery = localStorage.getItem('lastQuery');
+
+// Manual cache invalidation
+if (dataChanged) {
+  clearQueryCache();
+}
+```
+
+#### ✅ ALLOWED PATTERNS
+```typescript
+// Browser cache headers (automatic)
+fetch(url, { 
+  headers: { 'Cache-Control': 'public, max-age=300' } 
+});
+
+// SessionStorage for session data only
+sessionStorage.setItem('session_token', token);
+
+// Backend cache indicators
+if (response.headers.get('X-Cache') === 'HIT') {
+  showCacheNotice();
+}
+```
+
+#### 🔧 ENFORCEMENT
+```typescript
+/(?:cache|Cache)\.(set|get|put|store)/gi
+/localStorage\.setItem.*(?:query|result|data)/gi
+```
+
+---
+
+### Rule #5: No Assumption Inference or Modification
+**Foundation:** Assumptions are generated by backend and must remain read-only
+
+#### ❌ VIOLATIONS
+```typescript
+// Adding assumptions
+assumptions.push('Additional assumption based on user input');
+
+// Modifying assumptions
+const modifiedAssumptions = assumptions.map(a => 
+  a.replace('table_x', userPreferredTableName)
+);
+
+// Hiding assumptions
+const filteredAssumptions = assumptions.filter(a => 
+  !a.includes('sensitive')
+);
+
+// Local assumption generation
+const newAssumption = `Assuming ${tableName} contains ${columnName}`;
+```
+
+#### ✅ ALLOWED PATTERNS  
+```typescript
+// Read-only display
+<AssumptionsList assumptions={technicalView.assumptions} readOnly />
+
+// Copy to clipboard
+const copyAssumptions = () => {
+  navigator.clipboard.writeText(assumptions.join('\n'));
+};
+
+// Feedback on assumptions
+const reportIncorrectAssumption = (assumption: string) => {
+  submitFeedback({ type: 'incorrect_assumption', content: assumption });
+};
+```
+
+#### 🔧 ENFORCEMENT
+```typescript
+/assumptions?\.(add|push|modify|update)/gi
+```
+
+---
+
+### Rule #6: No Secret Storage in localStorage
+**Foundation:** Sensitive data must not persist beyond browser session
+
+#### ❌ VIOLATIONS
+```typescript
+// Tokens in localStorage
+localStorage.setItem('auth_token', jwt);
+
+// API keys in localStorage
 localStorage.setItem('api_key', apiKey);
 
-// ❌ FORBIDDEN: Store unencrypted secrets
-const secrets = {
-  stripe_key: process.env.STRIPE_KEY,
-  db_password: process.env.DB_PASSWORD
-};
-localStorage.setItem('secrets', JSON.stringify(secrets));
+// User credentials
+localStorage.setItem('password_hash', hashedPassword);
 
-// ❌ FORBIDDEN: Reuse token across sessions
-const token = localStorage.getItem('token');
-if (!token || token.isExpired()) {
-  redirectToLogin();
-}
+// Session data in localStorage
+localStorage.setItem('user_session', JSON.stringify(session));
 ```
 
-**Allowed:**
+#### ✅ ALLOWED PATTERNS
 ```typescript
-// ✅ ALLOWED: Store token in memory during session
-let sessionToken: string | null = null;
+// SessionStorage for tokens (clears on close)
+sessionStorage.setItem('session_token', token);
 
-function setToken(token: string) {
-  sessionToken = token;
-  // Auto-clear on browser close (memory cleared)
-}
-
-// ✅ ALLOWED: Refresh token via endpoint
-async function ensureValidToken() {
-  if (tokenExpiringSoon()) {
-    const { access_token } = await fetch('/api/v1/auth/refresh');
-    setToken(access_token);
+// Memory-only storage
+class TokenManager {
+  private token: string | null = null;
+  
+  setToken(token: string) {
+    this.token = token;
+    sessionStorage.setItem('session_token', token); // sessionStorage OK
   }
 }
 
-// ✅ ALLOWED: HttpOnly cookies (set by backend)
-// Browser automatically includes in requests, can't be read by JS
-// (Backend sets 'Set-Cookie: token=...; HttpOnly; Secure')
-
-// ✅ ALLOWED: Clear token on logout
-function logout() {
-  sessionToken = null;
-  localStorage.clear();
-  redirectToLogin();
-}
+// Secure cookies (backend-set)
+// No frontend cookie management for secrets
 ```
 
-**Rationale:** Tokens can be stolen if stored in localStorage. Use sessionStorage or HttpOnly cookies instead.
+#### 🔧 ENFORCEMENT
+```typescript
+/localStorage\.setItem.*(?:token|secret|key|password|auth)/gi
+/document\.cookie.*(?:token|secret|key)/gi
+```
 
 ---
 
-### Rule 7: No Streaming Response Reordering
+### Rule #7: No Response Reordering  
+**Foundation:** Backend guarantees correct chunk order, frontend must preserve it
 
-**Forbidden:**
+#### ❌ VIOLATIONS
 ```typescript
-// ❌ FORBIDDEN: Wait for all chunks, then reorder
-const chunks = [];
-for await (const chunk of stream) {
-  chunks.push(chunk);
-}
-const reordered = chunks.sort((a, b) => {
-  // Reorder by type or arrival time
-  return typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type);
+// Sorting chunks by type
+const orderedChunks = chunks.sort((a, b) => {
+  const order = ['thinking', 'technical_view', 'data', 'business_view'];
+  return order.indexOf(a.type) - order.indexOf(b.type);
 });
 
-// ❌ FORBIDDEN: Skip or defer chunks
-if (chunk.type === 'technical_view') {
-  deferredChunks.push(chunk); // Show later!
-}
+// Reordering for display
+const reorderedChunks = [...chunks].reverse();
+
+// Type-based reorganization
+const groupedChunks = {
+  thinking: chunks.filter(c => c.type === 'thinking'),
+  data: chunks.filter(c => c.type === 'data'),
+  // ...
+};
 ```
 
-**Allowed:**
+#### ✅ ALLOWED PATTERNS
 ```typescript
-// ✅ ALLOWED: Process chunks in arrival order
-for await (const chunk of streamResponse) {
-  switch (chunk.type) {
-    case 'thinking':
-      setThinking(chunk.status);
-      break;
-    case 'technical_view':
-      setTechnicalView(chunk);
-      break;
-    case 'data':
-      setData(chunk);
-      break;
-    // Process in order, immediately
+// Process chunks in received order
+const processChunk = (chunk: StreamChunk) => {
+  const validation = streamValidator.validateChunkOrder(chunk);
+  if (!validation.valid) {
+    throw new Error(`Chunk order violation: ${validation.error}`);
   }
-}
+  // Process chunk...
+};
+
+// Display in received order
+{chunks.map((chunk, index) => (
+  <ChunkDisplay key={index} chunk={chunk} />
+))}
 ```
 
-**Rationale:** Chunk order encodes contract semantics (technical_view MUST precede data for data context).
+#### 🔧 ENFORCEMENT
+```typescript
+/chunks?\.(sort|reverse|reorder)/gi
+/\.sort\(\s*\(.*chunk.*type.*\)/gi
+```
 
 ---
 
-### Rule 8: No Unauthorized Mutation
+### Rule #8: No Unauthorized Mutation
+**Foundation:** All state changes must be confirmed by backend before UI update
 
-**Forbidden:**
+#### ❌ VIOLATIONS
 ```typescript
-// ❌ FORBIDDEN: Directly mutate backend state without endpoint
-const user = await fetchUser();
-user.role = 'admin'; // Change locally?
-updateLocalState(user); // Then show as if persisted?
-
-// ❌ FORBIDDEN: Optimistic update without rollback
-users.value = users.value.map(u =>
-  u.id === userId ? { ...u, status: 'active' } : u
-);
-// What if the endpoint fails?
-
-// ❌ FORBIDDEN: Execute side effects without backend
-trainingItems.value = trainingItems.value.filter(
-  item => item.id !== approveId
-); // Does backend know?
-```
-
-**Allowed:**
-```typescript
-// ✅ ALLOWED: Send mutation request to backend
-async function approveTrainingItem(itemId: string) {
+// Optimistic UI updates
+const updateUser = async (userData) => {
+  setUser(userData); // ❌ Updated before backend confirms
+  
   try {
-    const result = await fetch(`/api/v1/admin/training/${itemId}/approve`, {
-      method: 'POST',
-      body: JSON.stringify({ notes: 'Approved' })
-    });
-    
-    if (!result.ok) {
-      showError('Approval failed');
-      return;
-    }
-    
-    // Only update UI after backend confirms
-    trainingItems.value = trainingItems.value.map(item =>
-      item.id === itemId ? { ...item, status: 'approved' } : item
-    );
+    await api.updateUser(userData);
   } catch (error) {
-    showError(error.message);
-    // UI remains unchanged
+    setUser(originalUser); // Rollback
   }
-}
+};
 
-// ✅ ALLOWED: Optimistic update with proper rollback
-const originalItems = [...trainingItems.value];
-trainingItems.value = trainingItems.value.filter(
-  item => item.id !== itemId
-);
-
-try {
-  await fetch(`/api/v1/admin/training/${itemId}/approve`, {
-    method: 'POST'
-  });
-  // Success, keep UI updated
-} catch (error) {
-  trainingItems.value = originalItems; // Rollback
-  showError(error.message);
-}
+// Immediate state changes
+const handleToggle = (toggleName, value) => {
+  setToggles(prev => ({ ...prev, [toggleName]: value })); // ❌ Before API call
+  updateToggle(toggleName, value);
+};
 ```
 
-**Rationale:** Frontend state is local; backend is authoritative. Never assume mutation succeeded until backend confirms.
-
----
-
-### Rule 9: No Policy Version Caching
-
-**Forbidden:**
+#### ✅ ALLOWED PATTERNS
 ```typescript
-// ❌ FORBIDDEN: Cache policy version indefinitely
-let cachedPolicyVersion = 5;
+// Wait for backend confirmation
+const updateUser = async (userData) => {
+  try {
+    const updatedUser = await api.updateUser(userData);
+    setUser(updatedUser); // ✅ Only after backend confirms
+  } catch (error) {
+    handleError(error);
+  }
+};
 
-function getActivePolicy() {
-  return cachedPolicyVersion; // Stale if policy updated!
-}
+// Loading states during mutations
+const [isUpdating, setIsUpdating] = useState(false);
 
-// ❌ FORBIDDEN: Assume policy version is constant
-const policyVersion = await fetch('/admin/policy').then(r => r.json());
-localStorage.setItem('policy_version', policyVersion);
-// Later, in another component:
-const policy = JSON.parse(localStorage.getItem('policy_version')); // Outdated!
+const handleUpdate = async () => {
+  setIsUpdating(true);
+  try {
+    const result = await api.updateData(newData);
+    setData(result); // ✅ Backend-confirmed data
+  } finally {
+    setIsUpdating(false);
+  }
+};
 ```
 
-**Allowed:**
+#### 🔧 ENFORCEMENT
 ```typescript
-// ✅ ALLOWED: Always fetch policy info from backend
-async function getPolicyInfo() {
-  const { policy_version } = await fetch('/api/v1/settings/policy')
-    .then(r => r.json());
-  
-  return policy_version; // Always fresh
-}
-
-// ✅ ALLOWED: Use policy hash from response
-const { policy_hash } = technicalView; // From backend, unique per query
-// Store for audit linkage, not reuse
-```
-
-**Rationale:** Policy can change server-side. Frontend must always fetch fresh policy version.
-
----
-
-### Rule 10: No Hardcoded Environment Assumptions
-
-**Forbidden:**
-```typescript
-// ❌ FORBIDDEN: Hardcode environment behavior
-if (process.env.NODE_ENV === 'production') {
-  skipLogin = false;
-}
-
-// ❌ FORBIDDEN: Assume auth behavior based on env
-const authRequired = !isDevelopment();
-
-// ❌ FORBIDDEN: Branch on environment
-if (isLocal) {
-  mockData = true;
-  skipValidation = true;
-}
-```
-
-**Allowed:**
-```typescript
-// ✅ ALLOWED: Detect environment at runtime
-async function detectBackendConfiguration() {
-  const health = await fetch('/api/v1/health').then(r => r.json());
-  const settings = {
-    AUTH_ENABLED: await checkAuthRequired(),
-    ENABLE_TRAINING_PILOT: await checkTrainingPilot(),
-    ...
-  };
-  
-  return settings;
-}
-
-// ✅ ALLOWED: Adapt UI based on backend capability
-if (backendSettings.ENABLE_TRAINING_PILOT) {
-  showTrainingTab = true;
-}
-
-// ✅ ALLOWED: Use feature detection
-try {
-  const response = await fetch('/api/v1/admin/training');
-  trainingAvailable = response.ok;
-} catch {
-  trainingAvailable = false;
-}
-```
-
-**Rationale:** Backend behavior varies; detect it at runtime, don't assume.
-
----
-
-## Allowed Patterns
-
-### Pattern: Display Data From Backend
-
-```typescript
-export function TechnicalViewPanel({ technicalView }) {
-  return (
-    <div>
-      <CodeBlock
-        language="sql"
-        code={technicalView.sql}
-      />
-      
-      <AssumptionsList assumptions={technicalView.assumptions} />
-      
-      <PolicyBadge hash={technicalView.policy_hash} />
-    </div>
-  );
-}
-```
-
-### Pattern: Trigger Backend Actions
-
-```typescript
-export function ApproveTrainingButton({ itemId, onSuccess }) {
-  const [loading, setLoading] = useState(false);
-
-  const approve = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `/api/v1/admin/training/${itemId}/approve`,
-        { method: 'POST', body: JSON.stringify({ notes: 'Approved' }) }
-      );
-      
-      if (!response.ok) {
-        throw new Error((await response.json()).message);
-      }
-      
-      onSuccess(); // Parent refetches data
-    } catch (error) {
-      showError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return <button onClick={approve} disabled={loading}>Approve</button>;
-}
-```
-
-### Pattern: Handle Streaming Responses
-
-```typescript
-export function AskPanel({ question }) {
-  const [state, setState] = useState({ chunks: [], error: null });
-
-  useEffect(() => {
-    (async () => {
-      const response = await fetch('/api/v1/ask', {
-        method: 'POST',
-        body: JSON.stringify({ question, stream: true })
-      });
-
-      if (!response.ok) {
-        setState({ chunks: [], error: await response.json() });
-        return;
-      }
-
-      // Stream chunks
-      for await (const chunk of consumeNDJSON(response)) {
-        setState(prev => ({
-          chunks: [...prev.chunks, chunk],
-          error: null
-        }));
-      }
-    })();
-  }, [question]);
-
-  return (
-    <>
-      {state.error && <ErrorAlert error={state.error} />}
-      {state.chunks.map((chunk, i) => (
-        <ChunkRenderer key={i} chunk={chunk} />
-      ))}
-    </>
-  );
-}
+/setState.*before.*fetch/gi
+/(?:create|update|delete).*optimistic/gi
 ```
 
 ---
 
-## Checklist for PR Reviews
+### Rule #9: No Policy Caching
+**Foundation:** Policies change dynamically and must be fetched fresh
 
-Before merging any frontend PR, verify:
+#### ❌ VIOLATIONS
+```typescript
+// Caching policy data
+const cachedPolicy = localStorage.getItem('policy_data');
 
-- [ ] No SQL generation or parsing
-- [ ] No permission checks (relying on backend 403)
-- [ ] No local RLS filtering
-- [ ] No custom caching logic
+// Policy version storage
+const storedPolicyVersion = sessionStorage.getItem('policy_version');
+
+// Manual policy caching
+const policyCache = new Map<string, PolicyData>();
+```
+
+#### ✅ ALLOWED PATTERNS
+```typescript
+// Fresh policy fetch for each request
+const checkPolicy = async (resource: string) => {
+  const policy = await api.getCurrentPolicy(resource);
+  return policy.allows_access;
+};
+
+// Backend policy headers
+const policyHash = response.headers.get('X-Policy-Hash');
+```
+
+#### 🔧 ENFORCEMENT
+```typescript
+/policy.*(?:cache|Cache|store)/gi
+```
+
+---
+
+### Rule #10: No Hardcoded Environment Assumptions
+**Foundation:** Runtime detection prevents deployment issues
+
+#### ❌ VIOLATIONS
+```typescript
+// Hardcoded environment checks
+const isProduction = window.location.hostname === 'app.easyok.com';
+
+// Build-time environment assumptions
+const apiUrl = process.env.NODE_ENV === 'production' 
+  ? 'https://api.easyok.com'
+  : 'http://localhost:8000';
+
+// Feature assumptions based on URL
+const enableAuth = location.hostname !== 'localhost';
+```
+
+#### ✅ ALLOWED PATTERNS
+```typescript
+// Runtime detection
+const config = await detectEnvironment();
+const authEnabled = config.backend.AUTH_ENABLED;
+
+// Build-time for non-security config only
+const debugMode = import.meta.env.VITE_DEBUG === 'true';
+const logLevel = import.meta.env.VITE_LOG_LEVEL || 'info';
+
+// Feature flag-based decisions
+const showTraining = useFeatureFlag('ENABLE_TRAINING_PILOT');
+```
+
+#### 🔧 ENFORCEMENT
+```typescript
+/(?:process\.env|import\.meta\.env)\.(?!VITE_)/gi
+/(?:localhost|127\.0\.0\.1|staging\.|prod\.).*hardcode/gi
+```
+
+---
+
+## 🚨 CI Integration & Enforcement
+
+### Automated Governance Check
+```bash
+# In CI pipeline (.github/workflows/governance-check.yml)
+npm run lint:governance
+
+# Fails if:
+# - Violations found without valid override  
+# - Override missing reason
+# - Override expired
+# - Token storage violations
+```
+
+### PR Checklist Template
+Every Pull Request must include this checklist:
+
+```markdown
+## Governance Compliance Checklist
+
+### Hard Rules (MUST CHECK ALL)
+- [ ] No SQL generation/parsing in code
+- [ ] No permission inference logic
+- [ ] No RLS filtering logic  
+- [ ] No custom caching beyond documented rules
 - [ ] No assumption modification/inference
-- [ ] Tokens stored securely (not localStorage for extended periods)
+- [ ] Tokens stored in sessionStorage (not localStorage)
 - [ ] Streaming chunks processed in order
 - [ ] All mutations sent to backend before UI update
-- [ ] No hardcoded environment assumptions
-- [ ] Backend configuration detected at runtime
-- [ ] All external data from `/api/v1` endpoints
-- [ ] Error handling includes trace_id logging
+- [ ] No policy version caching
+- [ ] Environment detection at runtime (not hardcoded)
+
+### Code Quality
+- [ ] Used ChunkType enum (not strings)
+- [ ] Validated chunk order with StreamValidator
+- [ ] All error codes handled
+- [ ] Feature flags accessed via useFeatureFlag()
+- [ ] Trace IDs included in error logs
+```
+
+### Governance Linter Configuration
+```json
+{
+  "name": "governance-linter",
+  "version": "1.0.0",
+  "scripts": {
+    "lint:governance": "node scripts/governance-lint.js"
+  }
+}
+```
+
+## 🔧 GovernanceValidator Implementation
+
+### Pattern Detection Engine
+```typescript
+export class GovernanceValidator {
+  private overrides = new Map<string, GovernanceIgnore[]>();
+  
+  /**
+   * Validates file against all governance rules
+   */
+  validateFile(content: string, filename: string): GovernanceValidationResult {
+    const overrides = this.parseGovernanceIgnores(content, filename);
+    const violations: Violation[] = [];
+    
+    // Check each rule
+    for (const rule of Object.values(GovernanceRule)) {
+      const ruleViolations = this.validateRule(content, filename, rule);
+      violations.push(...ruleViolations);
+    }
+    
+    return {
+      violations,
+      overrides,
+      isValid: violations.length === 0,
+      errors: violations.filter(v => v.severity === 'error').map(v => v.message),
+      warnings: violations.filter(v => v.severity === 'warning').map(v => v.message)
+    };
+  }
+  
+  /**
+   * Check if line has valid override
+   */
+  private hasValidOverride(filename: string, line: number, rule: GovernanceRule): boolean {
+    const fileOverrides = this.overrides.get(filename) || [];
+    return fileOverrides.some(override => 
+      override.line === line && 
+      override.rule === rule &&
+      (!override.expires || new Date(override.expires) > new Date())
+    );
+  }
+}
+```
+
+### Override Documentation
+```typescript
+/**
+ * Governance override examples
+ */
+
+// ✅ Valid override with expiry
+/**
+ * @governance-ignore-next-line rule=no-sql-generation reason="Display only with syntax highlighting for better UX"
+ * @approved_by="jane.doe@company.com" expires="2024-06-01"
+ */
+<SyntaxHighlighter language="sql">{sql}</SyntaxHighlighter>
+
+// ✅ Valid override for legacy code
+/**
+ * @governance-ignore-next-line rule=no-permission-inference reason="Legacy admin check being refactored"
+ * @approved_by="tech-lead" expires="2024-03-15"
+ */
+const isAdmin = user.role === 'admin';
+
+// ❌ Invalid - missing reason
+/**
+ * @governance-ignore-next-line rule=no-sql-generation
+ */
+
+// ❌ Invalid - expired override
+/**
+ * @governance-ignore-next-line rule=no-sql-generation reason="Legacy code"
+ * @expires="2023-01-01"
+ */
+```
+
+## 🧪 Testing Governance Compliance
+
+### Unit Tests for Governance
+```typescript
+describe('Governance Rule Compliance', () => {
+  let validator: GovernanceValidator;
+  
+  beforeEach(() => {
+    validator = new GovernanceValidator();
+  });
+  
+  test('should detect SQL generation violation', () => {
+    const code = `
+      const sql = \`SELECT * FROM \${tableName}\`;
+      executeQuery(sql);
+    `;
+    
+    const result = validator.checkRule(code, GovernanceRule.NO_SQL_GENERATION);
+    expect(result).toHaveLength(1);
+    expect(result[0].rule).toBe(GovernanceRule.NO_SQL_GENERATION);
+  });
+  
+  test('should allow valid override', () => {
+    const code = `
+      /**
+       * @governance-ignore-next-line rule=no-sql-generation reason="Display only"
+       * @approved_by="lead-dev" expires="2024-12-31"
+       */
+      <pre>{sql}</pre>
+    `;
+    
+    const result = validator.validateFile(code, 'test.tsx');
+    expect(result.isValid).toBe(true);
+  });
+});
+```
+
+### E2E Governance Testing
+```typescript
+test('should enforce sessionStorage token usage', async ({ page }) => {
+  // Monitor localStorage usage
+  await page.addInitScript(() => {
+    const originalSetItem = localStorage.setItem;
+    localStorage.setItem = function(key, value) {
+      if (key.includes('token') || key.includes('auth')) {
+        throw new Error(`Governance violation: Token saved to localStorage: ${key}`);
+      }
+      return originalSetItem.call(this, key, value);
+    };
+  });
+  
+  // Trigger login flow
+  await page.goto('/login');
+  await page.fill('#username', 'test@example.com');
+  await page.fill('#password', 'password');
+  await page.click('#submit');
+  
+  // Should not throw error (no localStorage token usage)
+  await expect(page.locator('#dashboard')).toBeVisible();
+});
+```
+
+## 📊 Governance Metrics & Monitoring
+
+### Rule Violation Tracking
+```typescript
+export function trackGovernanceViolation(rule: GovernanceRule, file: string, line: number) {
+  const violation = {
+    rule,
+    file,
+    line,
+    timestamp: Date.now(),
+    commit_sha: process.env.GITHUB_SHA,
+    build_id: process.env.BUILD_ID
+  };
+  
+  // Send to monitoring
+  fetch('/api/governance/violations', {
+    method: 'POST',
+    body: JSON.stringify(violation)
+  });
+  
+  console.error(`[GOVERNANCE] Rule violation: ${rule} in ${file}:${line}`);
+}
+```
+
+### Override Audit Trail
+```typescript
+export function auditGovernanceOverride(override: GovernanceIgnore) {
+  const auditEntry = {
+    rule: override.rule,
+    reason: override.reason,
+    approved_by: override.approved_by,
+    expires: override.expires,
+    file_path: override.file_path,
+    created_at: new Date().toISOString(),
+    pull_request: process.env.GITHUB_PR_NUMBER
+  };
+  
+  // Log for compliance audit
+  console.log(`[GOVERNANCE] Override granted: ${JSON.stringify(auditEntry)}`);
+}
+```
+
+## 📚 Related Documentation
+
+- **[`../frontend/src/utils/governanceValidator.ts`](../frontend/src/utils/governanceValidator.ts)** - Validator implementation
+- **[`../api/streaming.md`](../api/streaming.md)** - Rule #7 (chunk order)
+- **[`../api/errors.md`](../api/errors.md)** - Rule #8 (mutation handling)  
+- **[`../environment/frontend-behavior.md`](../environment/frontend-behavior.md)** - Rule #10 (environment detection)
 
 ---
 
-## Summary
+## ✅ Governance Compliance Summary
 
-**Frontend is:**
-- ✅ Display layer
-- ✅ Request router (to backend)
-- ✅ State manager (local UI state only)
-- ✅ Accessibility layer
+### Critical Rules (Zero Tolerance)
+1. **No SQL Generation** - Security critical
+2. **No localStorage Secrets** - Data protection critical
+3. **No Permission Inference** - Authorization critical
 
-**Frontend is NOT:**
-- ❌ Business logic engine
-- ❌ Security enforcer
-- ❌ SQL generator/interpreter
-- ❌ Secret store
-- ❌ Policy validator
+### Behavioral Rules (CI Enforced)
+4. **No Custom Caching** - Performance consistency
+5. **No Response Reordering** - Contract compliance  
+6. **No Unauthorized Mutation** - Data integrity
 
-**When in doubt:** If it feels like "logic," it belongs in the backend.
+### Architecture Rules (Design Integrity)
+7. **No RLS Logic** - Backend separation
+8. **No Assumption Inference** - Read-only principle
+9. **No Policy Caching** - Dynamic policy support
+10. **No Environment Assumptions** - Deployment flexibility
 
+### Override Process
+1. **Document Reason:** Minimum 10 characters explaining necessity
+2. **Set Expiry:** Maximum 6 months from override date  
+3. **Get Approval:** Technical lead or security team approval
+4. **CI Validation:** Automated override validation in pipeline
+5. **Audit Trail:** All overrides logged for compliance review
+
+**Remember:** These rules protect the application's security, maintainability, and compliance. Violations without proper overrides will fail CI and block deployments.

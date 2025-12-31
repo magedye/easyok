@@ -1,410 +1,625 @@
 # Frontend Environment Behavior Matrix
 
-**Audience:** Frontend Engineers  
-**Status:** Binding (Post-Stage-6)
+**Target Audience:** Frontend Developers, DevOps, QA Engineers  
+**Last Updated:** 2025-12-31  
+**Version:** Phase 4 Documentation  
 
----
+## 📋 Overview
 
-## Overview
+This document defines how the frontend application behaves across different environments (local, CI, production) based on feature flags and configuration. The **[`environmentDetection`](../frontend/src/utils/environmentDetection.ts:139)** system automatically adapts to backend capabilities without hardcoded assumptions.
 
-Backend behavior varies based on environment and feature flags. Frontend MUST adapt to these variations without hard-coding assumptions.
+## 🎯 Environment Detection Strategy
 
-This matrix documents **exactly** what Frontend should expect in each environment.
+### Hybrid Detection Approach (Governance Rule #10)
+To avoid hardcoded environment assumptions, the frontend uses a hybrid detection strategy:
 
----
+1. **Build-Time Config:** Non-security settings from Vite environment variables
+2. **Runtime Config:** Security & feature flags from backend `/health` endpoint
+3. **Automatic Adaptation:** Frontend adjusts UI based on detected capabilities
 
-## Environment Modes
-
-### Local Development (`ENV=local`)
-
-**When:** Developer running backend locally with `npm run dev` + `python main.py`
-
-| Aspect | Behavior |
-|--------|----------|
-| **Authentication** | `AUTH_ENABLED=false` by default → all endpoints succeed without token |
-| **RBAC** | `RBAC_ENABLED=false` → all users treated as admin |
-| **Rate Limiting** | `ENABLE_RATE_LIMIT=false` → no limits |
-| **Semantic Cache** | `ENABLE_SEMANTIC_CACHE=false` → every query re-executes |
-| **Training Pilot** | `ENABLE_TRAINING_PILOT=true` → `/admin/sandbox` available |
-| **Error Detail** | Full stack traces in error responses (for debugging) |
-| **CORS** | Permissive (typically `*` or `localhost:5173`) |
-
-**Frontend Adaptation:**
+### Detection Implementation
 ```typescript
-if (ENV === 'local') {
-  // Skip login screen, use dummy token
-  const token = localStorage.getItem('dev_token') || 'local_dev_token';
-  
-  // Show all admin panels
-  showAdminUI = true;
-  
-  // No rate limit warning
-  showRateLimitWarning = false;
+// ✅ Correct: Runtime detection
+const config = await detectEnvironment();
+const authEnabled = config.backend.AUTH_ENABLED;
+
+// ❌ Governance violation: Hardcoded assumption
+const authEnabled = process.env.NODE_ENV === 'production';
+```
+
+## 🏗️ Environment Matrix
+
+### Feature Flag Behavior by Environment
+
+| Feature Flag | Local | CI/Staging | Production | Description |
+|--------------|-------|------------|------------|-------------|
+| **`AUTH_ENABLED`** | `false` | `true` | `true` | Authentication system toggle |
+| **`RBAC_ENABLED`** | `false` | `true` | `true` | Role-based access control |
+| **`ENABLE_TRAINING_PILOT`** | `true` | `true` | `false` | Training/feedback features |
+| **`ENABLE_SEMANTIC_CACHE`** | `false` | `true` | `true` | Query result caching |
+| **`ENABLE_RATE_LIMIT`** | `false` | `true` | `true` | Request rate limiting |
+| **`ENABLE_OBSERVABILITY`** | `true` | `true` | `true` | Enhanced logging/metrics |
+| **`ENABLE_SENTRY_MONITORING`** | `false` | `true` | `true` | Error reporting to Sentry |
+
+### Immutable Toggles by Environment
+These toggles cannot be changed at runtime due to security requirements:
+
+| Environment | Immutable Toggles | Reason |
+|-------------|-------------------|---------|
+| **Local** | None | Full flexibility for development |
+| **CI/Staging** | `['AUTH_ENABLED']` | Consistent auth testing |
+| **Production** | `['AUTH_ENABLED', 'RBAC_ENABLED']` | Security-critical settings |
+
+## 🔧 Build-Time Configuration
+
+### Vite Environment Variables
+Set via `.env` files or build environment:
+
+```bash
+# .env.local (Local Development)
+VITE_DEBUG=true
+VITE_LOG_LEVEL=debug
+VITE_API_BASE_URL=http://localhost:8000
+VITE_SIGNOZ_DASHBOARD_URL=http://localhost:3301
+
+# .env.ci (CI/Staging) 
+VITE_DEBUG=false
+VITE_LOG_LEVEL=info
+VITE_API_BASE_URL=https://api-staging.easyok.com
+VITE_SIGNOZ_DASHBOARD_URL=https://signoz.staging.easyok.com
+
+# .env.production (Production)
+VITE_DEBUG=false
+VITE_LOG_LEVEL=warn
+VITE_API_BASE_URL=https://api.easyok.com
+VITE_SIGNOZ_DASHBOARD_URL=https://signoz.easyok.com
+```
+
+### Build Config Interface
+```typescript
+interface BuildTimeConfig {
+  DEBUG: boolean;                    // Debug mode toggle
+  LOG_LEVEL: 'debug' | 'info' | 'warn' | 'error';  // Logging verbosity
+  API_BASE_URL: string;             // Backend API URL
+  SIGNOZ_DASHBOARD_URL: string;     // Observability dashboard
+  NODE_ENV: 'development' | 'staging' | 'production';  // Build environment
 }
 ```
 
-**Typical .env:**
-```
-ENV=local
-AUTH_ENABLED=false
-RBAC_ENABLED=false
-DEBUG=true
-ENABLE_TRAINING_PILOT=true
-```
+## 🚀 Runtime Feature Detection
 
----
-
-### CI/Testing (`ENV=ci`)
-
-**When:** Running in CI pipeline or automated tests
-
-| Aspect | Behavior |
-|--------|----------|
-| **Authentication** | `AUTH_ENABLED=true` → tokens required |
-| **RBAC** | `RBAC_ENABLED=true` → enforced per role |
-| **Semantic Cache** | `ENABLE_SEMANTIC_CACHE=false` → consistent results |
-| **Training Pilot** | `ENABLE_TRAINING_PILOT=false` → `/admin/sandbox` unavailable |
-| **Error Detail** | Minimal (no internal details) |
-| **CORS** | Restricted to known CI domains |
-| **Database** | Test/fixture database (often in-memory SQLite) |
-
-**Frontend Adaptation:**
+### Backend Configuration Interface
 ```typescript
-if (ENV === 'ci') {
-  // Require login (use test credentials)
-  loginForm.show();
-  
-  // Hide experimental features
-  showAdminUI = false;
-  
-  // Expect errors to be concise
+interface BackendConfig {
+  AUTH_ENABLED: boolean;            // Authentication system
+  RBAC_ENABLED: boolean;           // Role-based access control
+  ENABLE_TRAINING_PILOT: boolean;  // Training features
+  ENABLE_SEMANTIC_CACHE: boolean;  // Query result caching
+  ENABLE_RATE_LIMIT: boolean;      // Request rate limiting
+  ENABLE_OBSERVABILITY: boolean;   // Enhanced logging
+  ENABLE_SENTRY_MONITORING: boolean; // Error reporting
+  IMMUTABLE_TOGGLES: string[];     // Toggles that can't change
 }
 ```
 
-**Typical .env:**
-```
-ENV=ci
-AUTH_ENABLED=true
-RBAC_ENABLED=true
-DEBUG=false
-DB_PROVIDER=sqlite  # or test fixtures
-```
-
----
-
-### Production (`ENV=production`)
-
-**When:** Running in production environment
-
-| Aspect | Behavior |
-|--------|----------|
-| **Authentication** | `AUTH_ENABLED=true` → JWT validation strict |
-| **RBAC** | `RBAC_ENABLED=true` → enforced per role |
-| **RLS** | `RLS_ENABLED=true` → row-level security enforced |
-| **Rate Limiting** | `ENABLE_RATE_LIMIT=true` → 60 req/min per user |
-| **Semantic Cache** | `ENABLE_SEMANTIC_CACHE=true` → cached results |
-| **Training Pilot** | `ENABLE_TRAINING_PILOT=false` → `/admin/sandbox` unavailable |
-| **Error Detail** | Minimal (no internal details, generic messages) |
-| **CORS** | Whitelist only approved domains |
-| **Debug** | `DEBUG=false` → no stack traces |
-
-**Frontend Adaptation:**
-```typescript
-if (ENV === 'production') {
-  // Require login with real credentials
-  enforceLogin();
-  
-  // Hide debug panels
-  showDebugInfo = false;
-  
-  // Implement exponential backoff on rate limit (429)
-  implementRateLimitBackoff();
-  
-  // Cache responses locally (respects cache headers)
-  enableClientSideCache();
+### Health Endpoint Response
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-12-31T01:00:00.000Z",
+  "version": "1.0.0",
+  "features": {
+    "auth_enabled": true,
+    "rbac_enabled": true,
+    "training_pilot": false,
+    "semantic_cache": true,
+    "rate_limit": true,
+    "observability": true,
+    "sentry_monitoring": true
+  },
+  "immutable_toggles": ["AUTH_ENABLED", "RBAC_ENABLED"]
 }
 ```
 
-**Typical .env:**
-```
-ENV=production
-AUTH_ENABLED=true
-RBAC_ENABLED=true
-RLS_ENABLED=true
-DEBUG=false
-ENABLE_SEMANTIC_CACHE=true
-```
+## 📱 Frontend Behavior by Environment
 
----
+### Local Development Environment
+**Characteristics:**
+- Fast feedback loop
+- Maximum feature access for testing
+- Relaxed security for convenience
+- Enhanced debugging capabilities
 
-## Key Feature Flags & Frontend Impact
-
-### `AUTH_ENABLED`
-
-**If `true`:**
-- Login screen required
-- Token stored in localStorage
-- Token sent in all requests: `Authorization: Bearer <token>`
-- `/auth/me` returns actual user info
-
-**If `false`:**
-- Login screen skipped
-- Dummy token used (`local_dev_token`)
-- All endpoints accept requests without auth header
-- `/auth/me` returns fixture user (admin)
-
-**Frontend Code:**
+**Feature States:**
 ```typescript
-const useAuth = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  useEffect(() => {
-    if (settings.AUTH_ENABLED) {
-      checkToken(); // Must be valid
-    } else {
-      setIsAuthenticated(true); // Pretend logged in
-    }
-  }, []);
-};
-```
-
----
-
-### `RBAC_ENABLED`
-
-**If `true`:**
-- `/auth/me` returns user roles and permissions
-- Endpoints check `x-permissions` header (from OpenAPI spec)
-- Admin endpoints return 403 if user lacks permission
-
-**If `false`:**
-- All users treated as super-admin
-- No permission checks
-- All endpoints succeed
-
-**Frontend Code:**
-```typescript
-const canAccess = (permission: string) => {
-  if (!settings.RBAC_ENABLED) return true; // Always allowed
-  return user.permissions.includes(permission);
-};
-
-// In components:
-{canAccess('admin.settings.write') && <AdminPanel />}
-```
-
----
-
-### `ENABLE_TRAINING_PILOT`
-
-**If `true`:**
-- Admin panel shows "Training Items" tab
-- `/admin/training` returns data
-- `/admin/training/{id}/approve` endpoint works
-- `/admin/sandbox` available for test queries
-
-**If `false`:**
-- Training UI is hidden
-- All `/admin/training` endpoints return 404
-- Feedback endpoint still works (for logging)
-
-**Frontend Code:**
-```typescript
-{settings.ENABLE_TRAINING_PILOT && (
-  <Tab label="Training" value="training">
-    <TrainingPanel />
-  </Tab>
-)}
-```
-
----
-
-### `ENABLE_SEMANTIC_CACHE`
-
-**If `true`:**
-- Same query may return cached result (faster, but potentially stale)
-- Response includes `X-Cache: HIT` header if served from cache
-- Policy hash may be from previous validation
-
-**If `false`:**
-- Every query re-executes (always fresh)
-- No caching headers
-
-**Frontend Code:**
-```typescript
-const isCachedResult = response.headers.get('X-Cache') === 'HIT';
-if (isCachedResult) {
-  showNotice('This result is cached from a previous query. Data may not be current.');
+{
+  AUTH_ENABLED: false,        // Skip login for faster dev
+  RBAC_ENABLED: false,        // All features accessible
+  ENABLE_TRAINING_PILOT: true,  // Test training features
+  ENABLE_SEMANTIC_CACHE: false, // Avoid stale development data
+  ENABLE_RATE_LIMIT: false,   // Unlimited requests for testing
+  ENABLE_OBSERVABILITY: true, // Debug logging enabled
+  ENABLE_SENTRY_MONITORING: false // No external error reporting
 }
 ```
 
----
+**UI Behavior:**
+- **Login Flow:** Bypassed, uses dummy token
+- **Admin Panel:** Fully accessible without role checks
+- **Training Features:** Enabled for testing feedback flows
+- **Error Messages:** Display full technical details
+- **Rate Limiting:** No request throttling
+- **Cache Notices:** Hidden (cache disabled)
 
-### `ENABLE_RATE_LIMIT`
+### CI/Staging Environment  
+**Characteristics:**
+- Production-like testing
+- Authentication enabled
+- Rate limiting active
+- Monitoring enabled
 
-**If `true`:**
-- `/ask` returns 429 after 60 requests/minute
-- Response includes `Retry-After` header
-- Frontend should implement exponential backoff
-
-**If `false`:**
-- No rate limiting
-- No 429 responses
-
-**Frontend Code:**
+**Feature States:**
 ```typescript
-const handleRateLimit = (error: APIError) => {
-  if (error.status === 429) {
-    const retryAfter = parseInt(error.headers['Retry-After'] || '60');
-    setTimeout(() => retryQuery(), retryAfter * 1000);
+{
+  AUTH_ENABLED: true,         // Test authentication flows
+  RBAC_ENABLED: true,         // Test role-based access
+  ENABLE_TRAINING_PILOT: true,  // Test training workflows
+  ENABLE_SEMANTIC_CACHE: true, // Test caching behavior
+  ENABLE_RATE_LIMIT: true,    // Test rate limit handling
+  ENABLE_OBSERVABILITY: true, // Full monitoring
+  ENABLE_SENTRY_MONITORING: true // Error reporting for debugging
+}
+```
+
+**UI Behavior:**
+- **Login Flow:** Required, tests auth integration
+- **Admin Panel:** Role-based access enforced
+- **Training Features:** Enabled for workflow testing
+- **Error Messages:** User-friendly with trace IDs
+- **Rate Limiting:** 429 errors show retry countdown
+- **Cache Notices:** Displayed when cache hit detected
+
+### Production Environment
+**Characteristics:**
+- Maximum security
+- Performance optimization
+- Minimal debug information
+- Full monitoring
+
+**Feature States:**
+```typescript
+{
+  AUTH_ENABLED: true,         // Required for security
+  RBAC_ENABLED: true,         // Enforce access control
+  ENABLE_TRAINING_PILOT: false, // Disable beta features
+  ENABLE_SEMANTIC_CACHE: true, // Optimize performance
+  ENABLE_RATE_LIMIT: true,    // Protect against abuse
+  ENABLE_OBSERVABILITY: true, // Monitor production issues
+  ENABLE_SENTRY_MONITORING: true // Report production errors
+}
+```
+
+**UI Behavior:**
+- **Login Flow:** Mandatory security enforcement
+- **Admin Panel:** Strict RBAC with audit logging
+- **Training Features:** Hidden from general users
+- **Error Messages:** User-friendly, no technical details
+- **Rate Limiting:** Enforced with user-friendly messages
+- **Cache Notices:** Simple cache indicator
+
+## 🎮 Feature Flag Implementation
+
+### Centralized Access Pattern
+Use **[`useFeatureFlag`](../frontend/src/hooks/useFeatureFlag.ts:139)** hook for consistent access:
+
+```typescript
+import { useFeatureFlag, useAllFeatureFlags } from '../hooks/useFeatureFlag';
+
+export function LoginPage() {
+  const authEnabled = useFeatureFlag('AUTH_ENABLED');
+  
+  if (!authEnabled) {
+    // Local development - skip login
+    return <DummyAuthSuccess />;
   }
-};
-```
-
----
-
-### `ENABLE_GZIP_COMPRESSION`
-
-**If `true`:**
-- Streaming responses are gzip-compressed
-- Automatically decompressed by browser
-
-**If `false`:**
-- Uncompressed responses (larger payloads)
-
-**Frontend:** No code change needed (browser handles automatically).
-
----
-
-## Behavior Matrix (Quick Reference)
-
-| Flag | Local | CI | Prod | Frontend Impact |
-|------|-------|----|----|-----------------|
-| `AUTH_ENABLED` | ❌ | ✅ | ✅ | Show/hide login |
-| `RBAC_ENABLED` | ❌ | ✅ | ✅ | Show/hide admin |
-| `RLS_ENABLED` | ❌ | ❌ | ✅ | N/A (backend) |
-| `ENABLE_TRAINING_PILOT` | ✅ | ❌ | ❌ | Show/hide training UI |
-| `ENABLE_SEMANTIC_CACHE` | ❌ | ❌ | ✅ | Show cache notice |
-| `ENABLE_RATE_LIMIT` | ❌ | ❌ | ✅ | Implement backoff |
-| `DEBUG` | ✅ | ❌ | ❌ | Show error details |
-
----
-
-## How to Detect Environment at Runtime
-
-**Option 1: GET /health**
-
-```typescript
-const detectEnvironment = async () => {
-  const response = await fetch('/api/v1/health');
-  const health = await response.json();
   
-  // Infer from component status:
-  // - If all components degraded: likely local
-  // - If auth present: ci or prod
-  // - Production flag in response: prod
-};
-```
-
-**Option 2: Check Settings Endpoint**
-
-```typescript
-const detectEnvironment = async () => {
-  try {
-    // This succeeds in all environments
-    const settings = await fetch('/api/v1/settings'); // Hypothetical
-    const config = await settings.json();
-    
-    return {
-      authEnabled: config.AUTH_ENABLED,
-      trainingPilot: config.ENABLE_TRAINING_PILOT,
-      ...
-    };
-  } catch {
-    // Endpoint not available = prod (security)
-  }
-};
-```
-
-**Option 3: Attempt Login with No Credentials**
-
-```typescript
-const detectEnvironment = async () => {
-  try {
-    // This succeeds if AUTH_ENABLED=false (local)
-    const response = await fetch('/api/v1/ask', {
-      method: 'POST',
-      body: JSON.stringify({ question: 'test' })
-    });
-    
-    if (response.ok) {
-      return 'local'; // No auth required
-    }
-  } catch {
-    // Timeout or error
-  }
-};
-```
-
----
-
-## Conditional UI Rendering
-
-**Pattern:**
-```typescript
-import { useSettings } from '@/hooks/useSettings';
+  return <LoginForm />;
+}
 
 export function AdminPanel() {
-  const { settings } = useSettings();
-
-  if (!settings.RBAC_ENABLED) {
-    return <AdminUI showAllFeatures />;
+  const hasAdminAccess = useAllFeatureFlags(['AUTH_ENABLED', 'RBAC_ENABLED']);
+  
+  if (!hasAdminAccess) {
+    return <AccessDenied message="Admin features require authentication" />;
   }
-
-  return <AdminUI restricted />;
+  
+  return <AdminUI />;
 }
+```
 
+### Environment-Specific Components
+
+#### Training Features
+```typescript
 export function TrainingTab() {
-  const { settings } = useSettings();
-
-  if (!settings.ENABLE_TRAINING_PILOT) {
-    return <Locked reason="Training pilot disabled" />;
+  const trainingEnabled = useFeatureFlag('ENABLE_TRAINING_PILOT');
+  const isProduction = useEnvironmentFlag(['production']);
+  
+  // Hide in production, even if accidentally enabled
+  if (isProduction && !trainingEnabled) {
+    return null;
   }
-
-  return <TrainingUI />;
+  
+  if (!trainingEnabled) {
+    return (
+      <ComingSoonBanner 
+        feature="Training Pilot"
+        message="This feature is being tested and will be available soon."
+      />
+    );
+  }
+  
+  return <TrainingPilotUI />;
 }
 ```
 
+#### Cache Notification
+```typescript
+export function CacheNotice({ response }: { response: Response }) {
+  const cacheEnabled = useFeatureFlag('ENABLE_SEMANTIC_CACHE');
+  const cacheHit = response.headers.get('X-Cache') === 'HIT';
+  
+  if (!cacheEnabled || !cacheHit) {
+    return null;
+  }
+  
+  return (
+    <div className="cache-notice bg-blue-50 border border-blue-200 rounded p-2 text-sm">
+      ℹ️ This result was cached from a previous query and may not be current
+    </div>
+  );
+}
+```
+
+#### Rate Limit Handler
+```typescript
+export function RateLimitNotice({ error }: { error: ErrorResponse }) {
+  const rateLimitEnabled = useFeatureFlag('ENABLE_RATE_LIMIT');
+  const isRateLimit = error.error_code === 'RATE_LIMIT_EXCEEDED';
+  
+  if (!rateLimitEnabled || !isRateLimit) {
+    return null;
+  }
+  
+  const retryAfter = error.retry_after || 30;
+  
+  return (
+    <div className="rate-limit-notice bg-yellow-50 border border-yellow-200 rounded p-3">
+      <div className="flex items-center gap-2">
+        <span>⏱️</span>
+        <span>Rate limit exceeded. Please wait {retryAfter} seconds before trying again.</span>
+      </div>
+      <RetryCountdown seconds={retryAfter} />
+    </div>
+  );
+}
+```
+
+## 🔒 Security Adaptations
+
+### Token Management by Environment
+```typescript
+export class TokenManager {
+  constructor(private config: EnvironmentConfig) {}
+  
+  async ensureValidToken(): Promise<string> {
+    // Local development - use dummy token
+    if (!this.config.backend.AUTH_ENABLED) {
+      return 'dummy-token-for-dev';
+    }
+    
+    // Production/staging - full token management
+    if (!this.token || this.isTokenExpiringSoon()) {
+      await this.refreshToken();
+    }
+    
+    return this.token;
+  }
+  
+  private isTokenExpiringSoon(): boolean {
+    if (!this.config.backend.AUTH_ENABLED) {
+      return false; // Dummy tokens never expire
+    }
+    
+    // Normal token expiry logic for auth-enabled environments
+    const timeUntilExpiry = this.getTimeUntilExpiry();
+    return timeUntilExpiry !== null && timeUntilExpiry < this.refreshThreshold;
+  }
+}
+```
+
+### API Request Headers by Environment
+```typescript
+const makeRequest = async (url: string, options: RequestInit = {}) => {
+  const config = await detectEnvironment();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...options.headers
+  };
+  
+  // Add auth header if enabled
+  if (config.backend.AUTH_ENABLED) {
+    const token = await tokenManager.ensureValidToken();
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  // Add trace headers for observability
+  if (config.backend.ENABLE_OBSERVABILITY) {
+    headers['X-Request-ID'] = `req_${Date.now()}_${Math.random().toString(36)}`;
+  }
+  
+  return fetch(url, {
+    ...options,
+    headers
+  });
+};
+```
+
+## 📊 Monitoring & Observability
+
+### Environment-Aware Logging
+```typescript
+export function useEnvironmentLogging() {
+  const config = useBackendConfig();
+  const buildConfig = useBuildConfig();
+  
+  const log = (level: string, message: string, data?: any) => {
+    // Local development - verbose console logging
+    if (buildConfig?.DEBUG) {
+      console[level](`[${level.toUpperCase()}] ${message}`, data);
+    }
+    
+    // Staging/production - structured logging
+    if (config.config?.backend.ENABLE_OBSERVABILITY) {
+      const logEntry = {
+        level,
+        message,
+        data,
+        timestamp: new Date().toISOString(),
+        environment: config.config.environment,
+        user_agent: navigator.userAgent
+      };
+      
+      // Send to observability service
+      if (window.__OBSERVABILITY_QUEUE__) {
+        window.__OBSERVABILITY_QUEUE__.push(logEntry);
+      }
+    }
+  };
+  
+  return { log };
+}
+```
+
+### Error Reporting by Environment
+```typescript
+export function reportError(error: Error, context: string) {
+  const config = useBackendConfig();
+  
+  // Always log to console in development
+  if (import.meta.env.DEV) {
+    console.error(`[${context}] Error:`, error);
+  }
+  
+  // Report to Sentry in staging/production
+  if (config.config?.backend.ENABLE_SENTRY_MONITORING) {
+    window.Sentry?.captureException(error, {
+      tags: {
+        environment: config.config.environment,
+        context
+      }
+    });
+  }
+  
+  // Track analytics in all environments with observability
+  if (config.config?.backend.ENABLE_OBSERVABILITY) {
+    window.gtag?.('event', 'exception', {
+      description: error.message,
+      fatal: false
+    });
+  }
+}
+```
+
+## 🧪 Testing Across Environments
+
+### Environment-Specific Test Configuration
+```typescript
+// playwright.config.ts
+export default defineConfig({
+  projects: [
+    {
+      name: 'local',
+      use: {
+        baseURL: 'http://localhost:5173',
+        extraHTTPHeaders: {
+          'X-Test-Environment': 'local'
+        }
+      }
+    },
+    {
+      name: 'staging',
+      use: {
+        baseURL: 'https://app-staging.easyok.com',
+        extraHTTPHeaders: {
+          'X-Test-Environment': 'staging'
+        }
+      }
+    }
+  ]
+});
+```
+
+### Feature Flag Testing
+```typescript
+// Test feature flag behavior across environments
+test.describe('Feature Flag Behavior', () => {
+  test('should skip authentication in local environment', async ({ page }) => {
+    // Mock local health response
+    await page.route('/api/v1/health', route => {
+      route.fulfill({
+        json: {
+          status: 'healthy',
+          features: {
+            auth_enabled: false,
+            rbac_enabled: false
+          }
+        }
+      });
+    });
+    
+    await page.goto('/');
+    
+    // Should go directly to main app without login
+    await expect(page.locator('#chat-interface')).toBeVisible();
+    await expect(page.locator('#login-form')).not.toBeVisible();
+  });
+  
+  test('should require authentication in production', async ({ page }) => {
+    // Mock production health response
+    await page.route('/api/v1/health', route => {
+      route.fulfill({
+        json: {
+          status: 'healthy',
+          features: {
+            auth_enabled: true,
+            rbac_enabled: true
+          }
+        }
+      });
+    });
+    
+    await page.goto('/');
+    
+    // Should redirect to login
+    await expect(page.locator('#login-form')).toBeVisible();
+  });
+});
+```
+
+## 🔧 Configuration Validation
+
+### Runtime Configuration Checks
+```typescript
+export function validateEnvironmentConfig(config: EnvironmentConfig): string[] {
+  const warnings: string[] = [];
+  
+  // Security checks
+  if (config.environment === 'production' && config.build.DEBUG) {
+    warnings.push('DEBUG mode enabled in production');
+  }
+  
+  if (config.environment === 'production' && !config.backend.AUTH_ENABLED) {
+    warnings.push('Authentication disabled in production');
+  }
+  
+  if (config.environment === 'production' && !config.backend.RBAC_ENABLED) {
+    warnings.push('RBAC disabled in production');
+  }
+  
+  // Feature consistency
+  if (config.backend.RBAC_ENABLED && !config.backend.AUTH_ENABLED) {
+    warnings.push('RBAC enabled but authentication disabled');
+  }
+  
+  if (config.environment === 'production' && config.backend.ENABLE_TRAINING_PILOT) {
+    warnings.push('Training pilot enabled in production');
+  }
+  
+  // Performance checks
+  if (config.environment === 'production' && !config.backend.ENABLE_RATE_LIMIT) {
+    warnings.push('Rate limiting disabled in production');
+  }
+  
+  return warnings;
+}
+```
+
+### Configuration Debug Component
+```typescript
+export function ConfigDebugPanel() {
+  const { config, isLoading, error } = useBackendConfig();
+  const isProduction = config?.environment === 'production';
+  
+  // Hide in production unless explicitly enabled
+  if (isProduction && !config?.build.DEBUG) {
+    return null;
+  }
+  
+  const warnings = config ? validateEnvironmentConfig(config) : [];
+  
+  return (
+    <div className="config-debug fixed bottom-4 right-4 bg-gray-900 text-white p-4 rounded-lg max-w-md">
+      <h3 className="font-bold mb-2">Environment Debug</h3>
+      
+      <div className="text-sm space-y-1">
+        <div>Environment: {config?.environment || 'Unknown'}</div>
+        <div>Auth: {config?.backend.AUTH_ENABLED ? '✅' : '❌'}</div>
+        <div>RBAC: {config?.backend.RBAC_ENABLED ? '✅' : '❌'}</div>
+        <div>Training: {config?.backend.ENABLE_TRAINING_PILOT ? '✅' : '❌'}</div>
+        <div>Cache: {config?.backend.ENABLE_SEMANTIC_CACHE ? '✅' : '❌'}</div>
+      </div>
+      
+      {warnings.length > 0 && (
+        <div className="mt-2 p-2 bg-yellow-600 rounded text-xs">
+          <div className="font-bold">⚠️ Config Warnings:</div>
+          {warnings.map((warning, i) => (
+            <div key={i}>• {warning}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+## 📚 Related Documentation
+
+- **[`../frontend/src/utils/environmentDetection.ts`](../frontend/src/utils/environmentDetection.ts)** - Environment detection implementation
+- **[`../frontend/src/hooks/useFeatureFlag.ts`](../frontend/src/hooks/useFeatureFlag.ts)** - Feature flag hooks
+- **[`../api/endpoints.md`](../api/endpoints.md)** - `/health` endpoint details
+- **[`../governance/frontend-rules.md`](../governance/frontend-rules.md)** - Rule #10 (no hardcoded assumptions)
+
 ---
 
-## Error Messages by Environment
+## 📋 Environment Checklist
 
-### Local
-```
-Database Connection Failed: Could not connect to oracle+oracledb://...
-  Stack trace: ...
-  Suggestion: Check ORACLE_CONNECTION_STRING in .env
-```
+### Local Development Setup
+- [ ] `.env.local` configured with local backend URL
+- [ ] Debug logging enabled
+- [ ] Authentication disabled for faster development
+- [ ] All training features accessible
+- [ ] No external monitoring enabled
 
-### CI / Production
-```
-Service Error: Unable to execute query
+### CI/Staging Deployment
+- [ ] `.env.ci` configured with staging backend URL
+- [ ] Authentication enabled and tested
+- [ ] Rate limiting functional
+- [ ] Monitoring and error reporting enabled
+- [ ] Training features available for testing
 
-Error Code: SERVICE_UNAVAILABLE
-Correlation ID: 550e8400-e29b-41d4-a716-446655440000
+### Production Deployment
+- [ ] `.env.production` with production backend URL
+- [ ] Authentication and RBAC enforced
+- [ ] Training features disabled
+- [ ] Full monitoring and error reporting
+- [ ] Performance optimization enabled
+- [ ] Security configuration validated
 
-[Retry] [Contact Support]
-```
-
----
-
-## Summary
-
-**Frontend must:**
-1. ✅ Detect environment/flags at startup
-2. ✅ Conditionally render UI based on settings
-3. ✅ Handle missing features gracefully
-4. ✅ Implement backoff for rate limiting (prod only)
-5. ✅ Show appropriate error messages per environment
-6. ✅ Never hard-code environment assumptions
-
+### Feature Flag Testing
+- [ ] All feature combinations tested in CI
+- [ ] Authentication flow tested across environments
+- [ ] Admin features properly restricted
+- [ ] Training features hidden in production
+- [ ] Rate limiting behavior verified
+- [ ] Cache notifications working correctly

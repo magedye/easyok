@@ -1,612 +1,692 @@
-# Frontend Local Development Setup & Testing
+# Frontend Development Setup Guide
 
-**Audience:** Frontend Engineers  
-**Status:** Complete Setup Guide (Post-Stage-6)
+**Target Audience:** Frontend Developers  
+**Last Updated:** 2025-12-31  
+**Version:** Phase 4 Documentation  
 
----
+## 📋 Overview
 
-## Prerequisites
+This document provides a complete setup guide for local frontend development, testing strategies, debugging techniques, and CI integration. Follow this guide to get productive quickly while maintaining governance compliance.
 
-- **Node.js** 16+ (check: `node --version`)
-- **npm** 8+ (check: `npm --version`)
-- **Backend running locally** on `http://localhost:8000` (or configured via `.env`)
-- **Git** (for version control)
+## 🚀 Quick Start (5 Minutes)
 
----
-
-## Setup Steps
-
-### 1. Install Dependencies
-
+### Prerequisites
 ```bash
-cd frontend/
+# Required software
+node --version        # >= 18.0.0
+npm --version         # >= 9.0.0
+git --version         # >= 2.30.0
 
+# Optional but recommended
+code --version        # VS Code for best experience
+```
+
+### Setup Steps
+```bash
+# 1. Clone repository
+git clone https://github.com/company/easyok.git
+cd easyok
+
+# 2. Install dependencies
 npm install
 
-# Or with yarn
-yarn install
-```
-
-**What gets installed:**
-- React 18+
-- TypeScript
-- Vite (dev server)
-- Chart.js, Axios, other UI libraries
-- Testing libraries (Jest, React Testing Library)
-
----
-
-### 2. Create `.env.local`
-
-Copy the example and customize:
-
-```bash
+# 3. Setup environment
 cp .env.example .env.local
-```
 
-**Sample `.env.local`:**
-```env
-# ============================================================================
-# Backend Configuration
-# ============================================================================
-
-# Backend URL (where FastAPI is running)
-VITE_API_BASE_URL=http://localhost:8000/api/v1
-
-# Enable mock mode (ignores real backend if true)
-VITE_USE_MOCK_API=false
-
-# ============================================================================
-# Application Settings
-# ============================================================================
-
-# App name (appears in UI)
-VITE_APP_NAME=EasyData
-
-# App version
-VITE_APP_VERSION=16.7.x
-
-# Frontend environment
-# Allowed: development | staging | production
-VITE_ENV=development
-
-# Enable debug logging
-VITE_DEBUG=true
-
-# ============================================================================
-# Feature Flags
-# ============================================================================
-
-# Show admin panels (overrides backend if true)
-VITE_SHOW_ADMIN_UI=true
-
-# Show training tab (overrides backend if true)
-VITE_SHOW_TRAINING_UI=true
-
-# Show error details in development
-VITE_SHOW_ERROR_DETAILS=true
-
-# ============================================================================
-# Analytics & Monitoring
-# ============================================================================
-
-# Sentry DSN (error tracking)
-# VITE_SENTRY_DSN=https://...
-
-# Google Analytics ID
-# VITE_GA_ID=G-...
-```
-
----
-
-### 3. Start Development Server
-
-```bash
+# 4. Start development server
 npm run dev
 
-# Output:
-# VITE v4.0.0 build preview server running at:
-# ➜  Local:   http://localhost:5173/
-# ➜  press h to show help
+# 5. Open browser
+# Frontend: http://localhost:5173
+# Backend: http://localhost:8000 (if running locally)
 ```
 
-**Access at:** `http://localhost:5173`
+## 📁 Project Structure
 
----
-
-### 4. Verify Backend Connection
-
-Open browser console and test:
-
-```javascript
-// In browser DevTools console:
-
-const response = await fetch('http://localhost:8000/api/v1/health');
-console.log(await response.json());
-
-// Should return:
-// {
-//   "status": "healthy",
-//   "components": { ... }
-// }
+```
+frontend/
+├── src/
+│   ├── api/                    # API layer & error handling
+│   │   ├── tokenManager.ts     # Thread-safe token management
+│   │   ├── errorHandler.ts     # Complete error code handling
+│   │   └── easyStream.ts       # NDJSON streaming client
+│   ├── components/             # React components
+│   │   ├── Chat.tsx            # Main chat interface
+│   │   ├── TechnicalViewPanel.tsx  # SQL display (read-only)
+│   │   └── ErrorDisplay.tsx    # User-friendly error messages
+│   ├── hooks/                  # Custom React hooks
+│   │   └── useFeatureFlag.ts   # Centralized feature flag access
+│   ├── types/                  # TypeScript interfaces
+│   │   └── streaming.ts        # ChunkType enum & interfaces
+│   └── utils/                  # Utility functions
+│       ├── streamingValidator.ts    # Contract enforcement
+│       ├── governanceValidator.ts   # Rule compliance checking
+│       └── environmentDetection.ts  # Runtime configuration
+├── docs/                       # Documentation (this folder)
+├── tests/                      # Test suites
+└── scripts/                    # Development scripts
 ```
 
----
+## ⚙️ Environment Configuration
 
-## Backend Configuration for Frontend Development
-
-The **backend** must be running locally with these settings for development:
-
-```env
-# .env (in backend root)
-
-# Development mode
-ENV=local
-APP_ENV=development
-DEBUG=true
-
-# Security: disable for local development
-AUTH_ENABLED=false
-RBAC_ENABLED=false
-RLS_ENABLED=false
-
-# Feature flags
-ENABLE_TRAINING_PILOT=true
-ENABLE_RATE_LIMIT=false
-ENABLE_LOGGING=true
-
-# CORS: allow frontend dev server
-CORS_ORIGINS=http://localhost:5173 http://localhost:3000
-
-# Database (use your test DB)
-DB_PROVIDER=oracle
-ORACLE_CONNECTION_STRING=...
-
-# LLM Provider
-LLM_PROVIDER=groq
-GROQ_API_KEY=...
-
-# Vector DB (local for dev)
-VECTOR_DB=chromadb
-VECTOR_STORE_PATH=./data/vectorstore
-
-# Port
-BACKEND_PORT=8000
-```
-
-**Start backend:**
+### Local Development (.env.local)
 ```bash
-# In backend root
-source .venv/bin/activate
-python main.py
-# Or with Uvicorn:
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+# Build-time configuration
+VITE_DEBUG=true
+VITE_LOG_LEVEL=debug
+VITE_API_BASE_URL=http://localhost:8000
+VITE_SIGNOZ_DASHBOARD_URL=http://localhost:3301
+
+# Feature overrides (optional - backend detection preferred)
+# VITE_FORCE_AUTH=false
+# VITE_FORCE_TRAINING=true
 ```
 
----
+### Environment Selection
+The frontend automatically detects environment based on URL:
+- `localhost` → Local development mode
+- `*staging*` or `*ci*` → CI/Staging mode  
+- Other domains → Production mode
 
-## Testing
+Use **[`environmentDetection`](../frontend/src/utils/environmentDetection.ts:139)** for runtime behavior:
 
-### Unit Tests
+```typescript
+const config = await detectEnvironment();
+console.log('Environment:', config.environment);
+console.log('Features:', config.backend);
+```
 
+## 🛠️ Development Workflow
+
+### 1. Feature Development
 ```bash
-npm run test
+# 1. Create feature branch
+git checkout -b feature/new-chat-feature
 
-# Watch mode
+# 2. Start development server with hot reload
+npm run dev
+
+# 3. Code with governance compliance
+# - Use ChunkType enum for streaming
+# - Access features via useFeatureFlag()
+# - Handle errors with ErrorHandler
+# - Validate streams with StreamValidator
+
+# 4. Run tests continuously
 npm run test:watch
 
-# Coverage
+# 5. Check governance compliance
+npm run lint:governance
+```
+
+### 2. Code Quality Checks
+```bash
+# Type checking
+npm run type-check
+
+# Linting
+npm run lint
+npm run lint:governance    # Governance rule validation
+
+# Formatting
+npm run format
+
+# All checks
+npm run check-all
+```
+
+### 3. Testing Strategy
+```bash
+# Unit tests
+npm run test
 npm run test:coverage
-```
 
-### Integration Tests (Full Stack)
-
-Requires both backend and frontend running:
-
-```bash
-npm run test:integration
-
-# Or with Playwright (E2E)
+# E2E tests
 npm run test:e2e
+npm run test:e2e:debug
+
+# Contract testing
+npm run test:streaming     # Validate chunk order
+npm run test:errors        # Test error handling
 ```
 
-**Typical E2E test:**
+## 🧪 Testing Error Cases Locally
+
+### Mock Backend Errors
 ```typescript
-import { test, expect } from '@playwright/test';
+// In development, mock specific errors for testing
 
-test('ask query and see results', async ({ page }) => {
-  await page.goto('http://localhost:5173');
-
-  // Fill question
-  await page.fill('[placeholder="Ask your question..."]', 'How many users?');
-
-  // Submit
-  await page.click('button:has-text("Ask")');
-
-  // Wait for technical_view
-  await page.waitForSelector('[data-test="technical-view"]');
-  const sql = await page.textContent('[data-test="sql"]');
-
-  expect(sql).toContain('SELECT');
-
-  // Wait for data
-  await page.waitForSelector('[data-test="data-table"]');
-  const rows = await page.$$('[data-test="data-row"]');
-
-  expect(rows.length).toBeGreaterThan(0);
+// Mock rate limit error
+await page.route('/api/v1/chat/ask', route => {
+  route.fulfill({
+    status: 429,
+    json: {
+      message: 'Rate limit exceeded',
+      error_code: 'RATE_LIMIT_EXCEEDED',
+      trace_id: 'mock_trace_001',
+      retry_after: 5
+    }
+  });
 });
+
+// Mock streaming interruption
+const mockStreamInterruption = async () => {
+  // Send partial stream then disconnect
+  const chunks = [
+    { type: 'thinking', trace_id: 'test_123', payload: { content: 'Processing...' } },
+    { type: 'technical_view', trace_id: 'test_123', payload: { sql: 'SELECT...' } }
+    // Missing data, business_view, and end chunks
+  ];
+  
+  // Simulate connection drop
+  setTimeout(() => controller.abort(), 2000);
+};
 ```
 
----
-
-## Mock API Mode
-
-For frontend-only development (no backend needed):
-
+### Local Error Testing
 ```bash
-# Set in .env.local
-VITE_USE_MOCK_API=true
+# Start backend in error simulation mode
+cd backend && python -m app.main --simulate-errors
+
+# Test specific error scenarios
+curl -X POST http://localhost:8000/api/v1/chat/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "FORCE_ERROR:RATE_LIMIT_EXCEEDED"}'
 ```
 
-**Mock responses are in `/src/mocks/`:**
+## 🔍 Testing Streaming Locally
 
+### Manual Stream Testing
 ```typescript
-// src/mocks/handlers.ts
-
-import { rest } from 'msw';
-
-export const handlers = [
-  rest.post('/api/v1/ask', (req, res, ctx) => {
-    // Stream mock chunks
-    return ctx.status(200);
-  }),
-
-  rest.post('/api/v1/auth/login', (req, res, ctx) => {
-    return res(
-      ctx.json({
-        access_token: 'mock_token_12345',
-        token_type: 'bearer',
-        expires_in: 3600
-      })
-    );
-  }),
-
-  // ... other endpoints
-];
+// Test streaming validation manually
+const testStreamValidation = async () => {
+  const validator = new StreamValidator();
+  
+  const testChunks = [
+    { type: ChunkType.THINKING, trace_id: 'test_001', timestamp: new Date().toISOString(), payload: { content: 'Testing...' } },
+    { type: ChunkType.TECHNICAL_VIEW, trace_id: 'test_001', timestamp: new Date().toISOString(), payload: { sql: 'SELECT 1', assumptions: [] } },
+    { type: ChunkType.END, trace_id: 'test_001', timestamp: new Date().toISOString(), payload: { message: 'Done' } }
+  ];
+  
+  for (const chunk of testChunks) {
+    const result = validator.validateChunkOrder(chunk);
+    console.log(`Chunk ${chunk.type}: ${result.valid ? '✅' : '❌'}`, result.error);
+  }
+};
 ```
 
-**Start server with mocks:**
+### Backend Streaming Test Endpoint
 ```bash
-npm run dev:mock
+# Use backend test endpoint for streaming validation
+curl -N -H "Accept: application/x-ndjson" \
+  "http://localhost:8000/api/v1/test/stream/valid-order"
+
+curl -N -H "Accept: application/x-ndjson" \
+  "http://localhost:8000/api/v1/test/stream/invalid-order"
 ```
 
----
+## 🔧 Debugging Techniques
 
-## Debugging
+### Frontend Debugging
+```typescript
+// Enable debug mode
+localStorage.setItem('debug', 'true');
 
-### 1. Browser DevTools
+// Stream debugging
+const enableStreamLogging = () => {
+  const originalValidate = streamValidator.validateChunkOrder;
+  streamValidator.validateChunkOrder = function(chunk) {
+    console.log('[Stream Debug]', {
+      type: chunk.type,
+      trace_id: chunk.trace_id,
+      payload_keys: Object.keys(chunk.payload)
+    });
+    return originalValidate.call(this, chunk);
+  };
+};
 
-Open Chrome DevTools (`F12`):
+// Token debugging (development only)
+const tokenDebug = tokenManager.getDebugInfo();
+console.log('Token state:', tokenDebug);
 
-**Network tab:**
-- Monitor `/api/v1/*` requests
-- Check status codes, response bodies
-- View streaming responses (NDJSON)
+// Feature flag debugging
+const flagDebug = useConfigDebug();
+console.log('Feature flags:', flagDebug);
+```
 
-**Console tab:**
-- Check for errors
-- Log API calls: `console.log(response)`
-- Test fetch manually
+### Browser DevTools
+```typescript
+// Add global debugging helpers
+window.__DEBUG__ = {
+  streamValidator,
+  tokenManager,
+  errorHandler,
+  getConfig: () => detectEnvironment(),
+  testError: (code) => errorHandler.handleError({ 
+    error_code: code, 
+    message: 'Test error', 
+    trace_id: 'debug_001' 
+  })
+};
 
-### 2. VS Code Debugging
+// Usage in console:
+// __DEBUG__.testError('RATE_LIMIT_EXCEEDED')
+// __DEBUG__.getConfig().then(console.log)
+```
 
-Launch debugger in `.vscode/launch.json`:
+### Network Debugging
+```bash
+# Monitor API calls with trace headers
+# In DevTools Network tab, look for:
+# - X-Trace-ID headers
+# - X-Request-ID headers  
+# - Authorization headers (Bearer tokens)
+# - Content-Type: application/x-ndjson for streams
 
+# Test API directly
+curl -H "Authorization: Bearer $(cat tmp/token)" \
+     -H "X-Request-ID: debug_$(date +%s)" \
+     -X POST http://localhost:8000/api/v1/chat/ask \
+     -d '{"question": "test", "stream": true}'
+```
+
+## 📝 Linting & Formatting Rules
+
+### ESLint Configuration
 ```json
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Chrome",
-      "type": "chrome",
-      "request": "launch",
-      "url": "http://localhost:5173",
-      "webRoot": "${workspaceFolder}/frontend",
-      "sourceMapPathPrefix": "webpack:///"
-    }
-  ]
+  "extends": [
+    "@typescript-eslint/recommended",
+    "plugin:react/recommended", 
+    "plugin:react-hooks/recommended"
+  ],
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "warn",
+    "react-hooks/exhaustive-deps": "error",
+    "no-console": ["error", { "allow": ["warn", "error"] }]
+  }
 }
 ```
 
-Set breakpoints in VS Code and inspect state.
+### Prettier Configuration
+```json
+{
+  "semi": true,
+  "trailingComma": "es5",
+  "singleQuote": true,
+  "tabWidth": 2,
+  "printWidth": 100
+}
+```
 
-### 3. Environment Variable Debugging
+### Governance Linter
+```bash
+# Custom governance rules (runs in CI)
+npm run lint:governance
 
-Log all environment variables:
+# Check specific rule
+npx governance-lint --rule no-sql-generation src/
 
+# Generate override template
+npx governance-lint --generate-override
+```
+
+## 🔄 Commit Rules & Git Workflow
+
+### Conventional Commits
+```bash
+# Format: type(scope): description
+
+# Feature commits
+git commit -m "feat(chat): add streaming validation with ChunkType enum"
+git commit -m "feat(auth): implement thread-safe token refresh"
+
+# Bug fixes  
+git commit -m "fix(error): handle network interruption in stream"
+git commit -m "fix(cache): correct sessionStorage usage for tokens"
+
+# Documentation
+git commit -m "docs(api): add streaming protocol specification"
+
+# Tests
+git commit -m "test(streaming): add chunk order validation tests"
+
+# Governance
+git commit -m "governance(rules): add override for legacy SQL display"
+```
+
+### Pre-commit Hooks
+```bash
+# Install pre-commit hooks
+npm run prepare
+
+# Hooks run automatically on commit:
+# 1. ESLint check
+# 2. Prettier formatting
+# 3. Type checking
+# 4. Governance validation
+# 5. Unit tests for changed files
+```
+
+### Branch Naming
+```bash
+# Features
+feature/add-training-pilot
+feature/enhance-error-display
+
+# Bug fixes
+fix/stream-validation-race-condition
+fix/token-refresh-deadlock
+
+# Governance
+governance/add-sql-display-override
+governance/fix-localstorage-violation
+
+# Hotfixes
+hotfix/critical-auth-bug
+```
+
+## 🚀 CI Validation Steps
+
+### GitHub Actions Pipeline
+```yaml
+# .github/workflows/frontend-ci.yml
+name: Frontend CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Type checking
+        run: npm run type-check
+      
+      - name: Linting
+        run: npm run lint
+      
+      - name: Governance validation
+        run: npm run lint:governance
+      
+      - name: Unit tests
+        run: npm run test:coverage
+      
+      - name: E2E tests
+        run: npm run test:e2e
+      
+      - name: Build
+        run: npm run build
+```
+
+### PR Validation Checklist
+Every PR automatically checks:
+- ✅ No TypeScript errors
+- ✅ No ESLint violations
+- ✅ Governance rules compliance
+- ✅ Test coverage >= 80%
+- ✅ E2E tests passing
+- ✅ Build successful
+
+### Manual PR Review Checklist
+Reviewers must verify:
+- [ ] [`ChunkType`](../frontend/src/types/streaming.ts:8) enum used (not strings)
+- [ ] Feature flags accessed via [`useFeatureFlag()`](../frontend/src/hooks/useFeatureFlag.ts:139)
+- [ ] Errors handled with [`ErrorHandler`](../frontend/src/api/errorHandler.ts:212)
+- [ ] Streams validated with [`StreamValidator`](../frontend/src/utils/streamingValidator.ts:25)
+- [ ] No localStorage usage for tokens
+- [ ] All governance overrides properly documented
+
+## 🧩 Component Development Guidelines
+
+### Component Template
 ```typescript
-// In App.tsx or main.tsx
-if (import.meta.env.DEV) {
-  console.log('Frontend Environment:', {
-    API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
-    USE_MOCK_API: import.meta.env.VITE_USE_MOCK_API,
-    DEBUG: import.meta.env.VITE_DEBUG,
-    ENV: import.meta.env.VITE_ENV
+import React from 'react';
+import { useFeatureFlag } from '../hooks/useFeatureFlag';
+
+interface MyComponentProps {
+  data: unknown;
+  onAction: () => void;
+}
+
+/**
+ * MyComponent - Brief description
+ * 
+ * @param data - Data to display
+ * @param onAction - Callback for user action
+ * 
+ * Governance compliance:
+ * - Uses feature flags for conditional rendering
+ * - No SQL generation or modification
+ * - Follows error handling patterns
+ */
+export const MyComponent: React.FC<MyComponentProps> = ({ 
+  data, 
+  onAction 
+}) => {
+  const isFeatureEnabled = useFeatureFlag('ENABLE_MY_FEATURE');
+  
+  if (!isFeatureEnabled) {
+    return <ComingSoonNotice feature="My Feature" />;
+  }
+  
+  return (
+    <div className="my-component">
+      {/* Component content */}
+    </div>
+  );
+};
+
+export default MyComponent;
+```
+
+### Testing Template
+```typescript
+import { render, screen, fireEvent } from '@testing-library/react';
+import { jest } from '@jest/globals';
+import MyComponent from './MyComponent';
+import { BackendConfigProvider } from '../hooks/useFeatureFlag';
+
+// Mock feature flag context
+const mockConfig = {
+  config: {
+    backend: { ENABLE_MY_FEATURE: true },
+    environment: 'local' as const,
+    build: { DEBUG: true }
+  },
+  isLoading: false,
+  error: null,
+  refresh: jest.fn()
+};
+
+describe('MyComponent', () => {
+  it('should render when feature is enabled', () => {
+    render(
+      <BackendConfigProvider value={mockConfig}>
+        <MyComponent data="test" onAction={jest.fn()} />
+      </BackendConfigProvider>
+    );
+    
+    expect(screen.getByText('My Feature Content')).toBeInTheDocument();
+  });
+  
+  it('should show coming soon when feature disabled', () => {
+    const disabledConfig = {
+      ...mockConfig,
+      config: { ...mockConfig.config, backend: { ENABLE_MY_FEATURE: false } }
+    };
+    
+    render(
+      <BackendConfigProvider value={disabledConfig}>
+        <MyComponent data="test" onAction={jest.fn()} />
+      </BackendConfigProvider>
+    );
+    
+    expect(screen.getByText('Coming Soon')).toBeInTheDocument();
+  });
+});
+```
+
+## 🔧 Troubleshooting Common Issues
+
+### Streaming Issues
+```bash
+# Problem: Chunks arriving out of order
+# Solution: Check backend chunk generation order
+# Debug: Enable stream logging
+
+# Problem: Missing END chunk
+# Solution: Check backend stream completion
+# Debug: Monitor network tab for aborted requests
+
+# Problem: Trace ID inconsistency  
+# Solution: Verify backend trace ID generation
+# Debug: Log trace IDs for each chunk
+```
+
+### Authentication Issues
+```bash
+# Problem: Token refresh race condition
+# Solution: Use TokenManager.ensureValidToken()
+# Debug: Check browser network for multiple refresh calls
+
+# Problem: Tokens in localStorage
+# Solution: Use sessionStorage only
+# Debug: Run governance linter
+
+# Problem: 401 errors not handled
+# Solution: Check error handler coverage
+# Debug: Test with expired token
+```
+
+### Feature Flag Issues
+```bash
+# Problem: Features not appearing
+# Solution: Check backend /health endpoint
+# Debug: Verify feature flag detection
+
+# Problem: Hardcoded environment checks
+# Solution: Use runtime detection
+# Debug: Run governance linter
+
+# Problem: Build-time assumptions
+# Solution: Use hybrid detection approach
+# Debug: Check environment detection logic
+```
+
+### Performance Issues
+```bash
+# Problem: Slow initial load
+# Solution: Check bundle size with npm run analyze
+# Debug: Use Lighthouse performance audit
+
+# Problem: Memory leaks
+# Solution: Check React DevTools Profiler
+# Debug: Monitor component unmount cleanup
+
+# Problem: Too many re-renders
+# Solution: Use React.memo and useMemo
+# Debug: React DevTools highlighting
+```
+
+## 📚 Additional Resources
+
+### Documentation Links
+- **[Main Handoff](../FRONTEND_HANDOFF.md)** - Executive summary
+- **[API Reference](../api/endpoints.md)** - All backend endpoints
+- **[Streaming Protocol](../api/streaming.md)** - NDJSON specification
+- **[Error Handling](../api/errors.md)** - All error codes
+- **[Feature Flags](../environment/frontend-behavior.md)** - Environment matrix
+- **[Governance Rules](../governance/frontend-rules.md)** - 10 hard rules
+
+### Learning Resources
+```bash
+# TypeScript strict mode patterns
+https://typescript-exercises.com/
+
+# React 18 features and hooks
+https://react.dev/learn
+
+# NDJSON streaming concepts  
+https://ndjson.org/
+
+# JWT token management
+https://jwt.io/introduction
+```
+
+### Browser Extensions
+- **React DevTools** - Component debugging
+- **Redux DevTools** - State management (if used)
+- **Lighthouse** - Performance auditing
+- **axe DevTools** - Accessibility testing
+
+## 🎓 Onboarding Checklist
+
+### Day 1: Environment Setup
+- [ ] Clone repository and install dependencies
+- [ ] Setup `.env.local` configuration
+- [ ] Start development server successfully
+- [ ] Run all tests and see them pass
+- [ ] Verify governance linter works
+
+### Day 2: Architecture Understanding  
+- [ ] Read governance rules documentation
+- [ ] Understand streaming protocol with ChunkType enum
+- [ ] Study error handling patterns
+- [ ] Learn feature flag system
+- [ ] Review component structure
+
+### Day 3: Development Practice
+- [ ] Create a simple component using useFeatureFlag
+- [ ] Write tests for the component
+- [ ] Submit a PR and pass code review
+- [ ] Experience CI pipeline
+- [ ] Practice debugging techniques
+
+### Week 1: Productivity
+- [ ] Comfortable with development workflow
+- [ ] Understand governance compliance requirements
+- [ ] Can debug streaming and authentication issues
+- [ ] Familiar with testing strategies
+- [ ] Ready for independent feature development
+
+---
+
+## 🚨 Emergency Debugging
+
+### Production Issues
+```typescript
+// Quick production debugging (use sparingly)
+console.error('[PROD DEBUG] Stream state:', {
+  chunks: streamValidator.getChunks().length,
+  phase: streamValidator.getCurrentPhase(),
+  traceId: streamValidator.getTraceId(),
+  isComplete: streamValidator.isComplete()
+});
+
+// Token state debugging
+if (window.__DEBUG__) {
+  console.error('[PROD DEBUG] Token state:', {
+    hasToken: tokenManager.hasToken(),
+    timeUntilExpiry: tokenManager.getTimeUntilExpiry()
   });
 }
 ```
 
----
-
-## Common Issues & Solutions
-
-### Issue 1: CORS Error
-
-**Error:**
-```
-Access to XMLHttpRequest at 'http://localhost:8000/api/v1/ask' 
-from origin 'http://localhost:5173' has been blocked by CORS policy
-```
-
-**Solution:**
-- Ensure backend `.env` includes frontend origin in `CORS_ORIGINS`
-- Restart backend
-- Check that `http://localhost:5173` (exact URL) is listed
-
-```env
-# In backend .env
-CORS_ORIGINS=http://localhost:5173
-```
-
----
-
-### Issue 2: 401 Unauthorized (But AUTH_ENABLED=false)
-
-**Error:**
-```json
-{
-  "error_code": "UNAUTHORIZED",
-  "message": "Invalid or expired JWT token"
-}
-```
-
-**Solution:**
-- Verify `AUTH_ENABLED=false` in backend `.env`
-- Clear browser cache: `Ctrl+Shift+Del`
-- Restart backend
-- Check if middleware is enforcing auth despite the flag
-
-```bash
-# In backend, grep for auth enforcement
-grep -r "require_auth" app/
-```
-
----
-
-### Issue 3: Streaming Response Not Consumed
-
-**Error:**
-```
-Unhandled promise rejection: Incomplete streaming response
-```
-
-**Solution:**
-- Ensure NDJSON response is being read correctly
-- Check if Response.body is being consumed in order
-- Validate chunk parsing:
-
-```typescript
-const reader = response.body.getReader();
-const decoder = new TextDecoder();
-
-while (true) {
-  const { done, value } = await reader.read();
-  if (done) break;
-
-  const line = decoder.decode(value);
-  const chunk = JSON.parse(line);
-  
-  console.log('Received chunk:', chunk.type);
-}
-```
-
----
-
-### Issue 4: Database Connection Failed (Backend)
-
-**Error:**
-```
-ORA-12514: TNS:listener does not currently know of service requested in connect descriptor
-```
-
-**Solution:**
-- Verify Oracle/MSSQL server is running
-- Check connection string in `.env`
-- Test connection manually:
-
-```bash
-sqlplus user/password@host:port/service
-```
-
----
-
-### Issue 5: Token Expiration During Development
-
-**Issue:** Token expires after `JWT_EXPIRATION_MINUTES` (default 60).
-
-**Solution:**
-- Increase expiration in backend `.env`:
-  ```env
-  JWT_EXPIRATION_MINUTES=1440  # 24 hours for dev
-  ```
-- Or implement token refresh in frontend:
-  ```typescript
-  if (tokenExpiringIn < 5 * 60) { // Less than 5 min
-    await refreshToken();
-  }
-  ```
-
----
-
-## Sample API Calls
-
-### 1. Login (if AUTH_ENABLED=true)
-
-```bash
-curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"user","password":"pass"}'
-
-# Response:
-# {
-#   "access_token": "eyJhbGc...",
-#   "token_type": "bearer",
-#   "expires_in": 3600
-# }
-```
-
-### 2. Get Current Session
-
-```bash
-curl -X GET http://localhost:8000/api/v1/auth/me \
-  -H "Authorization: Bearer YOUR_TOKEN"
-
-# Response:
-# {
-#   "user_id": "uuid",
-#   "username": "user",
-#   "roles": ["admin"],
-#   "permissions": ["*"]
-# }
-```
-
-### 3. Submit Query (Streaming)
-
-```bash
-curl -X POST http://localhost:8000/api/v1/ask \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -d '{"question":"How many users?","stream":true}' \
-  --http2
-
-# Response (NDJSON):
-# {"type":"thinking","trace_id":"...","status":"..."}
-# {"type":"technical_view","trace_id":"...","sql":"SELECT COUNT(*)..."}
-# {"type":"data","trace_id":"...","rows":[[150]]}
-# {"type":"end","trace_id":"...","duration_ms":245}
-```
-
-### 4. List Feature Toggles (Admin)
-
-```bash
-curl -X GET http://localhost:8000/api/v1/admin/settings/feature-toggles \
-  -H "Authorization: Bearer ADMIN_TOKEN"
-
-# Response:
-# {
-#   "toggles": [
-#     {
-#       "feature": "ENABLE_SEMANTIC_CACHE",
-#       "enabled": true,
-#       "mutable": true
-#     }
-#   ]
-# }
-```
-
----
-
-## Build for Production
-
-```bash
-npm run build
-
-# Output: frontend/dist/
-# Then deploy dist/ to web server
-```
-
-**Optimize:**
-```bash
-# Analyze bundle
-npm run build:analyze
-
-# Output shows largest modules (optimize before deploy)
-```
-
----
-
-## Hot Module Replacement (HMR)
-
-Changes auto-reload in dev mode:
-
-```bash
-# While running: npm run dev
-# Edit a component and save
-# Browser hot-reloads (preserves state if possible)
-```
-
-To disable HMR:
-```bash
-VITE_HMR_PROTOCOL=ws npm run dev
-```
-
----
-
-## Git Workflow
-
-```bash
-# Create feature branch
-git checkout -b feature/user-panel
-
-# Make changes, test locally
-npm run test
-npm run lint
-
-# Commit
-git add .
-git commit -m "feat: add user panel with RBAC"
-
-# Push and create PR
-git push origin feature/user-panel
-
-# In PR:
-# - Describe feature
-# - Link to backend changes
-# - Note breaking changes
-# - Request architecture review if governance-related
-```
-
----
-
-## Deployment Checklist
-
-Before deploying frontend:
-
-- [ ] All tests pass: `npm run test`
-- [ ] No lint errors: `npm run lint`
-- [ ] Build succeeds: `npm run build`
-- [ ] No console errors in DevTools
-- [ ] No hardcoded URLs (use `VITE_API_BASE_URL`)
-- [ ] Environment variables documented
-- [ ] No secrets in code (use `.env.local`)
-- [ ] Governance rules followed (see `frontend-rules.md`)
-- [ ] Streaming response handling verified
-- [ ] Error handling tested with offline backend
-- [ ] Accessibility audit passed (axe DevTools)
-
----
-
-## Summary
-
-| Task | Command |
-|------|---------|
-| Install | `npm install` |
-| Dev server | `npm run dev` |
-| Tests | `npm run test` |
-| Build | `npm run build` |
-| Lint | `npm run lint` |
-| Type check | `npm run type-check` |
-| Debug | Chrome DevTools or VS Code |
-
-**When stuck:** Check browser console, backend logs, CORS headers, environment variables (in that order).
-
+### Contact Information
+- **Frontend Issues:** frontend-team@company.com
+- **API Issues:** backend-team@company.com  
+- **Governance Questions:** architecture-team@company.com
+- **CI/CD Issues:** devops-team@company.com
+
+Remember: This setup guide ensures you develop efficiently while maintaining the strict governance and quality standards required for the EasyOK platform.

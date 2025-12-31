@@ -1,560 +1,1103 @@
-# Error Handling Contract
+# Error Codes & Handling Specification
 
-**Audience:** Frontend Engineers  
-**Status:** Binding (Post-Stage-6)
+**Target Audience:** Frontend Developers  
+**Last Updated:** 2025-12-31  
+**Version:** Phase 4 Documentation  
 
----
+## 📋 Overview
 
-## Overview
+This document provides comprehensive guidance on handling all documented backend error codes. The **[`ErrorHandler`](../frontend/src/api/errorHandler.ts:212)** implements standardized retry logic, user-friendly messaging, and recovery strategies for each error type.
 
-All errors returned by the Backend follow a **consistent JSON schema**.
+## 🎯 Error Handling Philosophy
 
-Errors are either:
-1. **Pre-stream (HTTP)** — returned before NDJSON begins
-2. **In-stream** — returned as `error` chunk within NDJSON
+1. **Complete Coverage:** Handle all 25+ documented error codes
+2. **User-Friendly Messages:** Never show technical stack traces
+3. **Smart Retry Logic:** Exponential backoff with jitter
+4. **Trace ID Correlation:** Always include trace_id for debugging
+5. **Recovery Guidance:** Provide actionable next steps
 
----
+## 📊 Error Response Schema
 
-## Standard Error Response
-
-All non-streaming errors return:
+### Standard Error Format
+All backend endpoints return consistent error structure:
 
 ```json
 {
-  "error_code": "UNIQUE_IDENTIFIER",
-  "message": "Human-readable description",
+  "message": "Human-readable error description",
+  "error_code": "MACHINE_READABLE_CODE",
+  "trace_id": "req_1704067200_abcd1234",
   "details": {
-    "field": "optional_context",
-    "correlation_id": "550e8400-e29b-41d4-a716-446655440000"
-  }
+    "field_name": "Additional context",
+    "suggested_action": "What user should do"
+  },
+  "retry_after": 30
 }
 ```
 
-**HTTP Headers:**
-| Header | Meaning |
-|--------|---------|
-| `X-Trace-ID` | Correlation ID (matches `details.correlation_id`) |
-| `X-Error-Code` | Error code (for programmatic handling) |
+### Error Interface
+```typescript
+interface ErrorResponse {
+  message: string;
+  error_code: string;
+  trace_id?: string;
+  details?: Record<string, unknown>;
+  retry_after?: number; // Seconds to wait before retry
+}
+```
 
----
+## 🚨 Complete Error Code Reference
 
-## Error Classification
+### Authentication & Authorization Errors
 
-### Authentication & Authorization Errors (4xx)
+#### INVALID_CREDENTIALS
+**Description:** Login failed due to wrong username/password  
+**Retryable:** No  
+**HTTP Status:** 401  
+**Frontend Action:** Stay on login page, clear password field
 
-#### `INVALID_CREDENTIALS` (401)
-
-**When:** Login with wrong username/password.
-
-**Response:**
 ```json
 {
+  "message": "Invalid username or password",
   "error_code": "INVALID_CREDENTIALS",
-  "message": "Username or password incorrect",
-  "details": {
-    "attempted_username": "user@example.com"
-  }
+  "trace_id": "req_1704067200_auth001"
 }
 ```
 
-**Frontend Action:** Show login form again, allow retry.
+**Frontend Handling:**
+```typescript
+case ErrorCode.INVALID_CREDENTIALS:
+  return {
+    shouldRetry: false,
+    userMessage: 'Invalid username or password. Please check your credentials and try again.',
+    requiresAction: 'none' // Stay on login page
+  };
+```
 
----
+#### UNAUTHORIZED  
+**Description:** No valid authentication token provided  
+**Retryable:** No  
+**HTTP Status:** 401  
+**Frontend Action:** Clear token, redirect to login
 
-#### `UNAUTHORIZED` (401)
-
-**When:** Token missing, expired, or invalid.
-
-**Response:**
 ```json
 {
-  "error_code": "UNAUTHORIZED",
-  "message": "Invalid or expired JWT token",
-  "details": {
-    "reason": "token_expired"
-  }
+  "message": "Authentication required",
+  "error_code": "UNAUTHORIZED", 
+  "trace_id": "req_1704067200_auth002"
 }
 ```
 
-**Possible Reasons:**
-- `token_expired` — Token lifetime exceeded
-- `token_invalid_signature` — Token tampered
-- `token_missing` — No Authorization header
-- `token_invalid_format` — Not `Bearer <token>`
+**Frontend Handling:**
+```typescript
+case ErrorCode.UNAUTHORIZED:
+  this.tokenManager.clearToken();
+  return {
+    shouldRetry: false,
+    userMessage: 'You are not authorized to access this resource. Please log in.',
+    requiresAction: 'login'
+  };
+```
 
-**Frontend Action:** 
-1. Clear stored token
-2. Redirect to login
-3. Allow user to re-authenticate
+#### FORBIDDEN
+**Description:** Authenticated but insufficient permissions  
+**Retryable:** No  
+**HTTP Status:** 403  
+**Frontend Action:** Show permission error, contact support
 
----
-
-#### `FORBIDDEN` (403)
-
-**When:** User lacks permission for endpoint.
-
-**Response:**
 ```json
 {
-  "error_code": "FORBIDDEN",
   "message": "Insufficient permissions for this operation",
+  "error_code": "FORBIDDEN",
+  "trace_id": "req_1704067200_auth003",
   "details": {
-    "required_permission": "admin.settings.write",
-    "user_permissions": ["admin.settings.read", "query.execute"]
+    "required_role": "admin",
+    "user_role": "viewer"
   }
 }
 ```
 
-**Frontend Action:** 
-- Hide or disable button
-- Show "Access Denied" if user tries anyway
-- Explain what permission is needed
+#### TOKEN_EXPIRED
+**Description:** JWT token has expired  
+**Retryable:** Yes (auto-refresh)  
+**HTTP Status:** 401  
+**Frontend Action:** Attempt token refresh, then retry
 
----
-
-### Policy & Governance Errors (403)
-
-#### `POLICY_VIOLATION` (403)
-
-**When:** Question references out-of-scope tables or columns.
-
-**Response (Pre-stream):**
 ```json
 {
+  "message": "Token has expired",
+  "error_code": "TOKEN_EXPIRED",
+  "trace_id": "req_1704067200_auth004"
+}
+```
+
+**Frontend Handling:**
+```typescript
+case ErrorCode.TOKEN_EXPIRED:
+  try {
+    await this.tokenManager.ensureValidToken();
+    return {
+      shouldRetry: true,
+      retryAfterMs: 100,
+      userMessage: 'Session refreshed. Retrying your request...',
+      requiresAction: 'none'
+    };
+  } catch {
+    this.tokenManager.clearToken();
+    return {
+      shouldRetry: false,
+      userMessage: 'Your session has expired. Please log in again.',
+      requiresAction: 'login'
+    };
+  }
+```
+
+#### TOKEN_INVALID
+**Description:** Malformed or corrupted JWT token  
+**Retryable:** No  
+**HTTP Status:** 401  
+**Frontend Action:** Clear token, redirect to login
+
+```json
+{
+  "message": "Invalid token format",
+  "error_code": "TOKEN_INVALID",
+  "trace_id": "req_1704067200_auth005"
+}
+```
+
+### Policy & Governance Errors
+
+#### POLICY_VIOLATION
+**Description:** Query violates data access policies  
+**Retryable:** No  
+**HTTP Status:** 403  
+**Frontend Action:** Show policy details, suggest alternatives
+
+```json
+{
+  "message": "Query violates data access policies",
   "error_code": "POLICY_VIOLATION",
-  "message": "Question references out-of-scope tables",
+  "trace_id": "req_1704067200_policy001",
   "details": {
-    "tables_requested": ["employees"],
-    "tables_allowed": ["customers", "orders"],
-    "policy_version": 5
+    "violated_policies": ["no_pii_access", "department_restriction"],
+    "allowed_tables": ["orders", "products"],
+    "blocked_tables": ["customers", "employees"]
   }
 }
 ```
 
-**Response (In-stream):**
-```json
-{
-  "type": "error",
-  "trace_id": "550e8400-e29b-41d4-a716-446655440000",
-  "timestamp": "2025-01-01T12:00:01.234567Z",
-  "error_code": "POLICY_VIOLATION",
-  "message": "Column 'salary' is not in active policy scope"
-}
+**Frontend Handling:**
+```typescript
+case ErrorCode.POLICY_VIOLATION:
+  return {
+    shouldRetry: false,
+    userMessage: 'Your query violates data access policies. Please review allowed tables and try again.',
+    requiresAction: 'none',
+    showDetails: true // Show details.allowed_tables
+  };
 ```
 
-**Frontend Action:**
-- Show error with explanation
-- Suggest allowed tables/columns
-- Offer to refactor the question
+#### SCHEMA_POLICY_VIOLATION
+**Description:** Access to schema restricted by policy  
+**Retryable:** No  
+**HTTP Status:** 403
 
----
-
-#### `IMMUTABLE_TOGGLE` (403)
-
-**When:** Trying to toggle a flag marked immutable in current environment.
-
-**Response:**
 ```json
 {
-  "error_code": "IMMUTABLE_TOGGLE",
-  "message": "Feature flag AUTH_ENABLED is immutable in production",
+  "message": "Access to schema 'finance' is restricted",
+  "error_code": "SCHEMA_POLICY_VIOLATION", 
+  "trace_id": "req_1704067200_policy002",
   "details": {
-    "feature": "AUTH_ENABLED",
-    "reason": "Cannot disable authentication in production",
-    "environment": "production"
+    "schema": "finance", 
+    "required_clearance": "level_3"
   }
 }
 ```
 
-**Frontend Action:**
-- Disable toggle UI (show lock icon)
-- Explain why it's immutable
-- No retry needed
+#### TABLE_ACCESS_DENIED
+**Description:** Specific table access denied  
+**Retryable:** No  
+**HTTP Status:** 403
 
----
-
-### Validation Errors (400)
-
-#### `INVALID_REQUEST` (400)
-
-**When:** Malformed request (missing required fields, wrong types).
-
-**Response:**
 ```json
 {
-  "error_code": "INVALID_REQUEST",
-  "message": "Question field is required and must be a string",
+  "message": "Access denied to table 'employee_salaries'",
+  "error_code": "TABLE_ACCESS_DENIED",
+  "trace_id": "req_1704067200_policy003",
+  "details": {
+    "table": "employee_salaries",
+    "required_permission": "READ_SENSITIVE"
+  }
+}
+```
+
+#### COLUMN_ACCESS_DENIED
+**Description:** Specific column restrictions  
+**Retryable:** No  
+**HTTP Status:** 403
+
+```json
+{
+  "message": "Access denied to columns: ssn, salary",
+  "error_code": "COLUMN_ACCESS_DENIED",
+  "trace_id": "req_1704067200_policy004",
+  "details": {
+    "blocked_columns": ["ssn", "salary"],
+    "allowed_columns": ["name", "department", "hire_date"]
+  }
+}
+```
+
+### Rate Limiting & Quota Errors
+
+#### RATE_LIMIT_EXCEEDED
+**Description:** Too many requests in time window  
+**Retryable:** Yes (with backoff)  
+**HTTP Status:** 429  
+**Frontend Action:** Wait for retry_after period, show countdown
+
+```json
+{
+  "message": "Rate limit exceeded",
+  "error_code": "RATE_LIMIT_EXCEEDED",
+  "trace_id": "req_1704067200_rate001",
+  "retry_after": 30,
+  "details": {
+    "limit": 100,
+    "window": "1 hour",
+    "current_usage": 105
+  }
+}
+```
+
+**Frontend Handling:**
+```typescript
+case ErrorCode.RATE_LIMIT_EXCEEDED:
+  const retryAfterMs = error.retry_after ? error.retry_after * 1000 : 2000;
+  return {
+    shouldRetry: true,
+    retryAfterMs,
+    userMessage: 'Too many requests. Please wait a moment before trying again.',
+    requiresAction: 'wait'
+  };
+```
+
+#### QUOTA_EXCEEDED
+**Description:** Monthly/daily usage quota exceeded  
+**Retryable:** No  
+**HTTP Status:** 429
+
+```json
+{
+  "message": "Monthly query quota exceeded",
+  "error_code": "QUOTA_EXCEEDED",
+  "trace_id": "req_1704067200_quota001",
+  "details": {
+    "quota_type": "monthly_queries",
+    "limit": 10000,
+    "used": 10000,
+    "reset_date": "2025-02-01T00:00:00.000Z"
+  }
+}
+```
+
+#### CONCURRENT_REQUEST_LIMIT
+**Description:** Too many simultaneous requests  
+**Retryable:** Yes (brief wait)  
+**HTTP Status:** 429
+
+```json
+{
+  "message": "Too many concurrent requests",
+  "error_code": "CONCURRENT_REQUEST_LIMIT",
+  "trace_id": "req_1704067200_conc001",
+  "details": {
+    "max_concurrent": 5,
+    "current_active": 7
+  }
+}
+```
+
+### Query Execution Errors
+
+#### SQL_EXECUTION_FAILED
+**Description:** Database execution error  
+**Retryable:** Yes (transient issues)  
+**HTTP Status:** 500
+
+```json
+{
+  "message": "Query execution failed",
+  "error_code": "SQL_EXECUTION_FAILED",
+  "trace_id": "req_1704067200_exec001",
+  "details": {
+    "database_error": "Connection timeout",
+    "suggestion": "Try simplifying the query"
+  }
+}
+```
+
+#### QUERY_TIMEOUT
+**Description:** Query took too long to execute  
+**Retryable:** Yes (with optimization)  
+**HTTP Status:** 408
+
+```json
+{
+  "message": "Query execution timed out",
+  "error_code": "QUERY_TIMEOUT",
+  "trace_id": "req_1704067200_timeout001",
+  "details": {
+    "timeout_seconds": 30,
+    "suggestion": "Try limiting results or adding filters"
+  }
+}
+```
+
+#### INVALID_QUERY
+**Description:** Generated SQL is invalid  
+**Retryable:** No  
+**HTTP Status:** 400
+
+```json
+{
+  "message": "Generated query is invalid",
+  "error_code": "INVALID_QUERY",
+  "trace_id": "req_1704067200_invalid001",
+  "details": {
+    "sql_error": "Syntax error near 'FORM'",
+    "suggestion": "Please rephrase your question"
+  }
+}
+```
+
+#### DATABASE_CONNECTION_FAILED
+**Description:** Cannot connect to database  
+**Retryable:** Yes (infrastructure issue)  
+**HTTP Status:** 503
+
+```json
+{
+  "message": "Database connection failed",
+  "error_code": "DATABASE_CONNECTION_FAILED",
+  "trace_id": "req_1704067200_db001"
+}
+```
+
+### LLM & AI Service Errors
+
+#### LLM_SERVICE_UNAVAILABLE
+**Description:** AI service is down  
+**Retryable:** Yes (with backoff)  
+**HTTP Status:** 503
+
+```json
+{
+  "message": "AI service temporarily unavailable", 
+  "error_code": "LLM_SERVICE_UNAVAILABLE",
+  "trace_id": "req_1704067200_llm001"
+}
+```
+
+#### LLM_QUOTA_EXCEEDED
+**Description:** AI service quota exhausted  
+**Retryable:** No  
+**HTTP Status:** 429
+
+```json
+{
+  "message": "AI service quota exceeded",
+  "error_code": "LLM_QUOTA_EXCEEDED",
+  "trace_id": "req_1704067200_llm002",
+  "details": {
+    "quota_type": "monthly_tokens",
+    "reset_date": "2025-02-01T00:00:00.000Z"
+  }
+}
+```
+
+#### LLM_GENERATION_FAILED
+**Description:** AI failed to generate response  
+**Retryable:** Yes (different prompt)  
+**HTTP Status:** 500
+
+```json
+{
+  "message": "AI response generation failed",
+  "error_code": "LLM_GENERATION_FAILED",
+  "trace_id": "req_1704067200_llm003",
+  "details": {
+    "reason": "Context too complex",
+    "suggestion": "Try breaking into smaller questions"
+  }
+}
+```
+
+#### CONTEXT_TOO_LARGE
+**Description:** Input exceeds context limits  
+**Retryable:** No  
+**HTTP Status:** 400
+
+```json
+{
+  "message": "Question is too complex",
+  "error_code": "CONTEXT_TOO_LARGE",
+  "trace_id": "req_1704067200_llm004",
+  "details": {
+    "max_tokens": 4000,
+    "actual_tokens": 5200
+  }
+}
+```
+
+### Streaming Errors
+
+#### STREAMING_INTERRUPTED
+**Description:** Stream connection lost  
+**Retryable:** Yes (restart)  
+**HTTP Status:** 500
+
+```json
+{
+  "message": "Stream connection interrupted",
+  "error_code": "STREAMING_INTERRUPTED",
+  "trace_id": "req_1704067200_stream001"
+}
+```
+
+#### STREAMING_TIMEOUT
+**Description:** Stream took too long  
+**Retryable:** Yes  
+**HTTP Status:** 408
+
+```json
+{
+  "message": "Stream response timed out",
+  "error_code": "STREAMING_TIMEOUT",
+  "trace_id": "req_1704067200_stream002"
+}
+```
+
+#### CHUNK_ORDER_VIOLATION
+**Description:** Invalid chunk sequence  
+**Retryable:** No  
+**HTTP Status:** 500
+
+```json
+{
+  "message": "Response format error",
+  "error_code": "CHUNK_ORDER_VIOLATION",
+  "trace_id": "req_1704067200_stream003",
+  "details": {
+    "expected": "technical_view",
+    "received": "data"
+  }
+}
+```
+
+### Infrastructure Errors
+
+#### SERVICE_UNAVAILABLE
+**Description:** Service temporarily down  
+**Retryable:** Yes (with backoff)  
+**HTTP Status:** 503
+
+```json
+{
+  "message": "Service temporarily unavailable",
+  "error_code": "SERVICE_UNAVAILABLE",
+  "trace_id": "req_1704067200_infra001"
+}
+```
+
+#### INTERNAL_SERVER_ERROR
+**Description:** Unexpected server error  
+**Retryable:** Yes (limited attempts)  
+**HTTP Status:** 500
+
+```json
+{
+  "message": "Internal server error",
+  "error_code": "INTERNAL_SERVER_ERROR",
+  "trace_id": "req_1704067200_infra002"
+}
+```
+
+#### GATEWAY_TIMEOUT
+**Description:** Upstream service timeout  
+**Retryable:** Yes  
+**HTTP Status:** 504
+
+```json
+{
+  "message": "Gateway timeout",
+  "error_code": "GATEWAY_TIMEOUT",
+  "trace_id": "req_1704067200_infra003"
+}
+```
+
+#### DEPENDENCY_FAILURE
+**Description:** Required service failed  
+**Retryable:** Yes  
+**HTTP Status:** 503
+
+```json
+{
+  "message": "Required service unavailable",
+  "error_code": "DEPENDENCY_FAILURE",
+  "trace_id": "req_1704067200_infra004",
+  "details": {
+    "failed_service": "user_directory"
+  }
+}
+```
+
+### Validation Errors
+
+#### VALIDATION_ERROR
+**Description:** Request validation failed  
+**Retryable:** No  
+**HTTP Status:** 400
+
+```json
+{
+  "message": "Request validation failed",
+  "error_code": "VALIDATION_ERROR",
+  "trace_id": "req_1704067200_valid001",
   "details": {
     "field": "question",
-    "error": "string expected"
+    "error": "Question cannot be empty"
   }
 }
 ```
 
-**Frontend Action:**
-- Show validation error near the field
-- Let user correct and retry
+#### INVALID_REQUEST_FORMAT
+**Description:** Malformed request  
+**Retryable:** No  
+**HTTP Status:** 400
 
----
-
-#### `INVALID_QUESTION` (400)
-
-**When:** Question is empty, too long, or nonsensical.
-
-**Response:**
 ```json
 {
-  "error_code": "INVALID_QUESTION",
-  "message": "Question must be between 5 and 500 characters",
-  "details": {
-    "min_length": 5,
-    "max_length": 500,
-    "provided_length": 2
-  }
+  "message": "Invalid request format",
+  "error_code": "INVALID_REQUEST_FORMAT",
+  "trace_id": "req_1704067200_valid002"
 }
 ```
 
-**Frontend Action:**
-- Show character count
-- Highlight min/max constraints
-- Allow retry
+#### MISSING_REQUIRED_FIELD
+**Description:** Required field missing  
+**Retryable:** No  
+**HTTP Status:** 400
 
----
-
-### Rate Limiting (429)
-
-#### `RATE_LIMIT_EXCEEDED` (429)
-
-**When:** User exceeds 60 requests/minute.
-
-**Response:**
 ```json
 {
-  "error_code": "RATE_LIMIT_EXCEEDED",
-  "message": "Rate limit exceeded: 60 requests per minute",
+  "message": "Required field missing: question",
+  "error_code": "MISSING_REQUIRED_FIELD",
+  "trace_id": "req_1704067200_valid003",
   "details": {
-    "limit_per_minute": 60,
-    "requests_so_far": 61
+    "field": "question"
   }
 }
 ```
 
-**HTTP Header:**
-```
-Retry-After: 45
-```
+### Training & Admin Errors
 
-**Frontend Action:**
-1. Show: "Too many requests. Try again in 45 seconds."
-2. Implement exponential backoff:
-   ```typescript
-   const retryAfter = parseInt(response.headers['Retry-After'] || '60');
-   const delay = Math.min(retryAfter * 1000, 60000); // Cap at 60s
-   setTimeout(() => retryRequest(), delay);
-   ```
-3. Disable submit button during cooldown
-4. Show countdown timer
+#### TRAINING_ITEM_NOT_FOUND
+**Description:** Training item doesn't exist  
+**Retryable:** No  
+**HTTP Status:** 404
 
----
-
-### SQL & Query Execution Errors (500)
-
-#### `SQL_EXECUTION_FAILED` (500)
-
-**When:** SQL execution fails on the database.
-
-**Response:**
 ```json
 {
-  "error_code": "SQL_EXECUTION_FAILED",
-  "message": "ORA-00942: table or view does not exist",
+  "message": "Training item not found",
+  "error_code": "TRAINING_ITEM_NOT_FOUND",
+  "trace_id": "req_1704067200_train001",
   "details": {
-    "sql_executed": "SELECT * FROM invalid_table",
-    "database_error": "ORA-00942",
-    "table_name": "invalid_table"
+    "item_id": "training_123"
   }
 }
 ```
 
-**In-stream version:**
+#### TRAINING_VALIDATION_FAILED
+**Description:** Training data invalid  
+**Retryable:** No  
+**HTTP Status:** 400
+
 ```json
 {
-  "type": "error",
-  "trace_id": "550e8400-e29b-41d4-a716-446655440000",
-  "error_code": "SQL_EXECUTION_FAILED",
-  "message": "ORA-00942: table or view does not exist",
+  "message": "Training data validation failed",
+  "error_code": "TRAINING_VALIDATION_FAILED",
+  "trace_id": "req_1704067200_train002",
   "details": {
-    "database": "oracle",
-    "error_code": "ORA-00942"
+    "errors": ["SQL syntax error", "Missing question text"]
   }
 }
 ```
 
-**Frontend Action:**
-- Display error message
-- Show generated SQL (for debugging)
-- Suggest: "This might be a temporary database issue. Try again?"
-- **Do NOT** show full exception stack in production
-- Log error with trace_id for support
+#### FEATURE_TOGGLE_IMMUTABLE
+**Description:** Cannot modify immutable toggle  
+**Retryable:** No  
+**HTTP Status:** 400
 
----
-
-#### `SQL_GENERATION_FAILED` (500)
-
-**When:** LLM couldn't generate valid SQL from the question.
-
-**Response:**
 ```json
 {
-  "error_code": "SQL_GENERATION_FAILED",
-  "message": "Could not generate valid SQL for the given question",
+  "message": "Feature toggle cannot be modified",
+  "error_code": "FEATURE_TOGGLE_IMMUTABLE",
+  "trace_id": "req_1704067200_toggle001",
   "details": {
-    "reason": "Question is too ambiguous",
-    "suggestion": "Try: 'How many customers placed orders in January?'"
+    "toggle_name": "AUTH_ENABLED",
+    "reason": "Security-critical setting"
   }
 }
 ```
 
-**Frontend Action:**
-- Show error with context
-- Provide suggestion if available
-- Offer: "Try rephrasing your question"
-- Link to help docs on phrasing
+## 🔄 Retry Logic Configuration
 
----
-
-### External Service Errors (5xx)
-
-#### `SERVICE_UNAVAILABLE` (503)
-
-**When:** LLM provider, vector store, or database is down.
-
-**Response:**
-```json
-{
-  "error_code": "SERVICE_UNAVAILABLE",
-  "message": "One or more backend services are unavailable",
-  "details": {
-    "unavailable_services": ["llm_provider", "vector_store"],
-    "estimated_recovery": "2025-01-01T12:15:00Z"
-  }
-}
-```
-
-**Frontend Action:**
-1. Show: "Services are temporarily unavailable. We're working on it."
-2. Implement retry with exponential backoff
-3. Show `estimated_recovery` time if available
-4. Disable query submission temporarily
-
----
-
-#### `STREAMING_INTERRUPTED` (500)
-
-**When:** Connection lost during NDJSON stream.
-
-**In-stream response:**
-```json
-{
-  "type": "error",
-  "trace_id": "550e8400-e29b-41d4-a716-446655440000",
-  "error_code": "STREAMING_INTERRUPTED",
-  "message": "Connection lost during streaming",
-  "details": {
-    "last_chunk_type": "technical_view",
-    "recovery_possible": true
-  }
-}
-```
-
-**Frontend Action:**
-- Show: "Connection interrupted. Would you like to retry?"
-- If `recovery_possible=true`, use same `trace_id` for retry
-- If `recovery_possible=false`, restart fresh query
-
----
-
-### Admin & Governance Errors (400/403)
-
-#### `MISSING_REASON` (400)
-
-**When:** Admin tries to toggle a feature without required reason.
-
-**Response:**
-```json
-{
-  "error_code": "MISSING_REASON",
-  "message": "Reason required for feature toggle (min 10 characters)",
-  "details": {
-    "min_reason_length": 10,
-    "provided_length": 0
-  }
-}
-```
-
-**Frontend Action:**
-- Show validation error on form
-- Require user to enter reason before submitting
-
----
-
-#### `TRAINING_ALREADY_PROCESSED` (400)
-
-**When:** Trying to approve/reject a training item that's already processed.
-
-**Response:**
-```json
-{
-  "error_code": "TRAINING_ALREADY_PROCESSED",
-  "message": "Training item is already approved; cannot be modified",
-  "details": {
-    "item_id": "uuid",
-    "current_status": "approved",
-    "approved_at": "2025-01-01T10:00:00Z",
-    "approved_by": "admin@example.com"
-  }
-}
-```
-
-**Frontend Action:**
-- Show warning: "This item was already approved on [date]"
-- Prevent further modifications
-- Show who approved it
-
----
-
-## Error Handling Strategy
-
-### In Components
+### Retry Configurations by Error Type
+The **[`ErrorHandler`](../frontend/src/api/errorHandler.ts:212)** uses specific retry configs:
 
 ```typescript
-async function submitQuery(question: string) {
-  try {
-    const response = await fetch('/api/v1/ask', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ question, stream: true })
-    });
+interface RetryConfig {
+  enabled: boolean;
+  maxAttempts: number;
+  baseDelayMs: number;
+  exponential: boolean;
+  jitterMs: number;
+}
 
-    if (!response.ok) {
-      // Pre-stream error (HTTP)
-      const error = await response.json();
-      handlePreStreamError(error);
-      return;
-    }
+const RETRY_CONFIGS: Record<ErrorCode, RetryConfig> = {
+  // Authentication - No retry
+  [ErrorCode.INVALID_CREDENTIALS]: { 
+    enabled: false, maxAttempts: 0, baseDelayMs: 0, exponential: false, jitterMs: 0 
+  },
+  
+  // Rate limiting - Exponential backoff
+  [ErrorCode.RATE_LIMIT_EXCEEDED]: { 
+    enabled: true, maxAttempts: 5, baseDelayMs: 2000, exponential: true, jitterMs: 1000 
+  },
+  
+  // Infrastructure - Aggressive retry
+  [ErrorCode.SERVICE_UNAVAILABLE]: { 
+    enabled: true, maxAttempts: 4, baseDelayMs: 3000, exponential: true, jitterMs: 2000 
+  },
+  
+  // Policy violations - No retry
+  [ErrorCode.POLICY_VIOLATION]: { 
+    enabled: false, maxAttempts: 0, baseDelayMs: 0, exponential: false, jitterMs: 0 
+  }
+};
+```
 
-    // Stream response
-    for await (const chunk of consumeStream(response)) {
-      if (chunk.type === 'error') {
-        // In-stream error
-        handleInStreamError(chunk);
-        break;
+### Exponential Backoff Formula
+```typescript
+const calculateRetryDelay = (attempt: number, config: RetryConfig): number => {
+  let delay = config.baseDelayMs;
+  
+  if (config.exponential) {
+    delay = config.baseDelayMs * Math.pow(2, attempt);
+  }
+  
+  const jitter = Math.random() * config.jitterMs;
+  return delay + jitter;
+};
+
+// Example for RATE_LIMIT_EXCEEDED:
+// Attempt 1: 2000ms + (0-1000ms jitter) = 2000-3000ms
+// Attempt 2: 4000ms + (0-1000ms jitter) = 4000-5000ms  
+// Attempt 3: 8000ms + (0-1000ms jitter) = 8000-9000ms
+```
+
+## 🎨 Frontend Implementation
+
+### Error Handler Usage
+```typescript
+import { getErrorHandler, ErrorCode } from '../api/errorHandler';
+
+const handleApiCall = async (apiCall: () => Promise<Response>) => {
+  const requestId = `req_${Date.now()}`;
+  const errorHandler = getErrorHandler();
+  
+  let attempt = 0;
+  const maxAttempts = 5;
+  
+  while (attempt < maxAttempts) {
+    try {
+      const response = await apiCall();
+      
+      if (response.ok) {
+        // Success - clear retry attempts
+        errorHandler.clearRetryAttempts(requestId);
+        return await response.json();
       }
-      // Handle other chunk types
+      
+      // Handle error response
+      const error = await ErrorHandler.parseErrorFromResponse(response);
+      const handling = await errorHandler.handleError(error, requestId);
+      
+      if (handling.shouldRetry && attempt < maxAttempts - 1) {
+        // Wait before retry
+        await new Promise(resolve => 
+          setTimeout(resolve, handling.retryAfterMs || 1000)
+        );
+        attempt++;
+        continue;
+      }
+      
+      // No more retries or non-retryable error
+      throw new Error(handling.userMessage);
+      
+    } catch (error) {
+      if (attempt >= maxAttempts - 1) {
+        throw error;
+      }
+      attempt++;
     }
-  } catch (err) {
-    // Network error or parse error
-    handleNetworkError(err);
   }
+};
+```
+
+### Error Display Component
+```typescript
+interface ErrorDisplayProps {
+  error: ErrorResponse;
+  onRetry?: () => void;
+  onDismiss?: () => void;
 }
 
-function handlePreStreamError(error: ErrorResponse) {
-  switch (error.error_code) {
-    case 'POLICY_VIOLATION':
-      showError(`Question out of scope: ${error.details.tables_requested.join(', ')}`);
-      break;
-    case 'RATE_LIMIT_EXCEEDED':
-      showError(`Too many requests. Retry in ${error.details.retry_after}s`);
-      disableSubmitButton(error.details.retry_after * 1000);
-      break;
-    case 'UNAUTHORIZED':
-      redirectToLogin();
-      break;
-    default:
-      showError(error.message);
-  }
-}
+export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({ 
+  error, 
+  onRetry, 
+  onDismiss 
+}) => {
+  const errorHandler = getErrorHandler();
+  const [retryCountdown, setRetryCountdown] = useState(0);
+  
+  useEffect(() => {
+    if (error.error_code === ErrorCode.RATE_LIMIT_EXCEEDED && error.retry_after) {
+      let remaining = error.retry_after;
+      setRetryCountdown(remaining);
+      
+      const timer = setInterval(() => {
+        remaining--;
+        setRetryCountdown(remaining);
+        
+        if (remaining <= 0) {
+          clearInterval(timer);
+        }
+      }, 1000);
+      
+      return () => clearInterval(timer);
+    }
+  }, [error]);
+  
+  const getErrorIcon = (errorCode: string) => {
+    switch (errorCode) {
+      case ErrorCode.UNAUTHORIZED:
+      case ErrorCode.TOKEN_EXPIRED:
+        return '🔒';
+      case ErrorCode.RATE_LIMIT_EXCEEDED:
+        return '⏱️';
+      case ErrorCode.POLICY_VIOLATION:
+        return '🛡️';
+      default:
+        return '⚠️';
+    }
+  };
+  
+  const shouldShowRetry = () => {
+    const retryableErrors = [
+      ErrorCode.RATE_LIMIT_EXCEEDED,
+      ErrorCode.SERVICE_UNAVAILABLE,
+      ErrorCode.STREAMING_INTERRUPTED,
+      ErrorCode.SQL_EXECUTION_FAILED
+    ];
+    
+    return retryableErrors.includes(error.error_code as ErrorCode) && onRetry;
+  };
+  
+  const getActionButton = () => {
+    if (retryCountdown > 0) {
+      return (
+        <button disabled className="btn btn-disabled">
+          Retry in {retryCountdown}s
+        </button>
+      );
+    }
+    
+    if (shouldShowRetry()) {
+      return (
+        <button onClick={onRetry} className="btn btn-primary">
+          Try Again
+        </button>
+      );
+    }
+    
+    if (error.error_code === ErrorCode.UNAUTHORIZED) {
+      return (
+        <button onClick={() => window.location.href = '/login'} className="btn btn-primary">
+          Log In
+        </button>
+      );
+    }
+    
+    return null;
+  };
+  
+  return (
+    <div className="error-display bg-red-50 border border-red-200 rounded-lg p-4">
+      <div className="flex items-start gap-3">
+        <span className="text-2xl">{getErrorIcon(error.error_code)}</span>
+        
+        <div className="flex-1">
+          <h3 className="font-semibold text-red-800">
+            {ErrorHandler.formatUserError(error)}
+          </h3>
+          
+          {error.trace_id && (
+            <p className="text-sm text-red-600 mt-1">
+              Reference ID: {error.trace_id}
+            </p>
+          )}
+          
+          {error.details && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-sm text-red-700">
+                Technical Details
+              </summary>
+              <pre className="text-xs bg-red-100 p-2 mt-1 rounded overflow-auto">
+                {JSON.stringify(error.details, null, 2)}
+              </pre>
+            </details>
+          )}
+          
+          <div className="flex gap-2 mt-3">
+            {getActionButton()}
+            
+            {onDismiss && (
+              <button onClick={onDismiss} className="btn btn-secondary">
+                Dismiss
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+```
 
-function handleInStreamError(chunk: ErrorChunk) {
-  showError(`Query failed: ${chunk.message}`);
-  logError({ trace_id: chunk.trace_id, code: chunk.error_code });
+### Global Error Boundary
+```typescript
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('React Error Boundary caught error:', {
+      error: error.message,
+      stack: error.stack,
+      errorInfo,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Report to monitoring service
+    if (window.Sentry) {
+      window.Sentry.captureException(error, {
+        contexts: { react: errorInfo }
+      });
+    }
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      return (
+        <ErrorDisplay
+          error={{
+            message: 'An unexpected error occurred. Please refresh the page.',
+            error_code: 'INTERNAL_CLIENT_ERROR',
+            trace_id: `client_${Date.now()}`
+          }}
+          onRetry={() => window.location.reload()}
+        />
+      );
+    }
+    
+    return this.props.children;
+  }
 }
 ```
 
----
+## 🔍 Debugging & Monitoring
 
-## Retry Logic
-
-### Retryable Errors
-
-| Code | Should Retry | Strategy |
-|------|--------------|----------|
-| `SQL_EXECUTION_FAILED` | Maybe | Exponential backoff, max 3x |
-| `SERVICE_UNAVAILABLE` | Yes | Exponential backoff, max 5x |
-| `STREAMING_INTERRUPTED` | Yes | Resume with same trace_id |
-| `RATE_LIMIT_EXCEEDED` | Yes | Wait `Retry-After` seconds |
-| `POLICY_VIOLATION` | No | Refactor question |
-| `INVALID_CREDENTIALS` | No | Re-authenticate |
-| `SQL_GENERATION_FAILED` | No | Rephrase question |
-
-### Backoff Formula
-
+### Error Correlation
 ```typescript
-const maxRetries = 5;
-const baseDelay = 1000; // 1s
-
-for (let attempt = 1; attempt <= maxRetries; attempt++) {
-  try {
-    return await executeQuery();
-  } catch (error) {
-    if (!isRetryable(error)) throw error;
-    
-    const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential
-    const jitter = Math.random() * 1000; // Random jitter
-    
-    await sleep(delay + jitter);
+// Always log errors with trace_id for backend correlation
+const logError = (error: ErrorResponse, context: string) => {
+  console.error(`[${context}] Error occurred:`, {
+    error_code: error.error_code,
+    message: error.message,
+    trace_id: error.trace_id,
+    timestamp: new Date().toISOString(),
+    user_agent: navigator.userAgent,
+    url: window.location.href
+  });
+  
+  // Send to monitoring service
+  if (window.gtag) {
+    window.gtag('event', 'exception', {
+      description: error.error_code,
+      fatal: false,
+      custom_map: {
+        trace_id: error.trace_id
+      }
+    });
   }
-}
+};
 ```
 
----
-
-## Logging & Monitoring
-
-**Always log with trace_id:**
-
+### Error Metrics Collection
 ```typescript
-logger.error('Query failed', {
-  trace_id: chunk.trace_id,
-  error_code: chunk.error_code,
-  message: chunk.message,
-  timestamp: new Date().toISOString(),
-  user_id: currentUser.id
+// Track error frequency for monitoring
+const trackErrorMetrics = (error: ErrorResponse) => {
+  const metrics = {
+    error_code: error.error_code,
+    timestamp: Date.now(),
+    trace_id: error.trace_id,
+    user_id: getCurrentUser()?.id
+  };
+  
+  // Local storage for debugging
+  const errorLog = JSON.parse(localStorage.getItem('error_log') || '[]');
+  errorLog.push(metrics);
+  
+  // Keep only last 100 errors
+  if (errorLog.length > 100) {
+    errorLog.splice(0, errorLog.length - 100);
+  }
+  
+  localStorage.setItem('error_log', JSON.stringify(errorLog));
+  
+  // Send to analytics
+  if (window.analytics) {
+    window.analytics.track('Error Occurred', metrics);
+  }
+};
+```
+
+## 🧪 Testing Error Scenarios
+
+### Unit Tests for Error Handler
+```typescript
+describe('ErrorHandler', () => {
+  let errorHandler: ErrorHandler;
+  
+  beforeEach(() => {
+    errorHandler = new ErrorHandler();
+  });
+  
+  it('should handle rate limit with exponential backoff', async () => {
+    const error: ErrorResponse = {
+      message: 'Rate limit exceeded',
+      error_code: 'RATE_LIMIT_EXCEEDED',
+      trace_id: 'test_trace',
+      retry_after: 2
+    };
+    
+    const handling = await errorHandler.handleError(error, 'test_req');
+    
+    expect(handling.shouldRetry).toBe(true);
+    expect(handling.retryAfterMs).toBe(2000);
+    expect(handling.userMessage).toContain('Too many requests');
+  });
+  
+  it('should not retry policy violations', async () => {
+    const error: ErrorResponse = {
+      message: 'Policy violation',
+      error_code: 'POLICY_VIOLATION',
+      trace_id: 'test_trace'
+    };
+    
+    const handling = await errorHandler.handleError(error, 'test_req');
+    
+    expect(handling.shouldRetry).toBe(false);
+    expect(handling.showDetails).toBe(true);
+  });
 });
 ```
 
-**Send to monitoring (e.g., Sentry):**
-
+### E2E Error Testing
 ```typescript
-Sentry.captureException(error, {
-  contexts: {
-    api: {
-      trace_id: response.headers.get('X-Trace-ID'),
-      error_code: errorResponse.error_code
-    }
-  }
+// Playwright test for error scenarios
+test('should handle authentication error gracefully', async ({ page }) => {
+  // Mock 401 response
+  await page.route('/api/v1/chat/ask', route => {
+    route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        message: 'Authentication required',
+        error_code: 'UNAUTHORIZED',
+        trace_id: 'test_trace_401'
+      })
+    });
+  });
+  
+  // Trigger request
+  await page.fill('#question', 'test question');
+  await page.click('#submit');
+  
+  // Verify error handling
+  const errorDisplay = page.locator('.error-display');
+  await expect(errorDisplay).toBeVisible();
+  await expect(errorDisplay).toContainText('log in');
+  
+  // Verify login redirect
+  await page.click('text=Log In');
+  await expect(page).toHaveURL(/\/login/);
 });
 ```
 
+## 📚 Related Documentation
+
+- **[`../frontend/src/api/errorHandler.ts`](../frontend/src/api/errorHandler.ts)** - Error handler implementation
+- **[`endpoints.md`](endpoints.md)** - API endpoints and error responses
+- **[`../frontend/src/components/ErrorDisplay.tsx`](../frontend/src/components/ErrorDisplay.tsx)** - Error UI component
+- **[`../governance/frontend-rules.md`](../governance/frontend-rules.md)** - Error handling governance rules
+
 ---
 
-## Summary
+## 📋 Error Handling Checklist
 
-**Frontend must:**
-1. ✅ Parse both HTTP and in-stream errors
-2. ✅ Handle errors appropriately (retry, retry-after, redirect, etc.)
-3. ✅ Display user-friendly messages (no stack traces in prod)
-4. ✅ Log errors with trace_id for support
-5. ✅ Implement exponential backoff for retryable errors
-6. ✅ Never assume error structure (validate before accessing fields)
+### Implementation Checklist
+- [ ] All 25+ error codes handled with specific logic
+- [ ] Retry configurations defined for each error type
+- [ ] User-friendly messages (no technical jargon)
+- [ ] Trace ID included in all error logs
+- [ ] Exponential backoff with jitter implemented
+- [ ] Auth errors clear token and redirect appropriately
+- [ ] Policy errors show actionable details
+- [ ] Rate limit errors show countdown timer
+- [ ] Stream errors trigger recovery flow
 
+### Testing Checklist
+- [ ] Unit tests for all error codes
+- [ ] E2E tests for critical error flows
+- [ ] Manual testing of retry logic
+- [ ] Monitoring dashboards set up
+- [ ] Error correlation with backend traces verified
+
+### Monitoring Checklist
+- [ ] Error rate alerts configured
+- [ ] Retry success rate tracking
+- [ ] User experience impact measurement
+- [ ] Trace ID correlation working
+- [ ] Performance impact of retries monitored

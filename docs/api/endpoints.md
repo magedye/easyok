@@ -1,531 +1,642 @@
-# API Endpoints Reference — EasyData Fortress v16.7.9
+# API Endpoints Reference
 
-**Audience:** Frontend Engineers  
-**Status:** Binding (Post-Stage-6)  
-**Authority:** `/openapi/fortress.yaml`
+**Target Audience:** Frontend Developers  
+**Last Updated:** 2025-12-31  
+**Version:** Phase 4 Documentation  
 
----
+## 📋 Overview
 
-## Overview
+This document provides a comprehensive reference for all backend endpoints used by the frontend. Each endpoint includes HTTP method, path, request/response schemas, and example usage.
 
-All Frontend requests MUST use the endpoints listed below. The **OpenAPI spec is authoritative**; this document provides narrative context.
+## 🔐 Authentication
 
-**Base URL:** `/api/v1`  
-**Protocol:** HTTP/HTTPS  
-**Content-Type:** `application/json` (requests) / `application/x-ndjson` (streaming responses)
+Most endpoints require authentication via Bearer token in the `Authorization` header:
 
----
+```http
+Authorization: Bearer <jwt_token>
+```
 
-## Authentication Endpoints
+Endpoints marked as **Public** do not require authentication.
 
-### `POST /auth/login`
+## 📡 Base URLs by Environment
 
-**Purpose:** Obtain JWT token.
+| Environment | Base URL |
+|------------|----------|
+| Local | `http://localhost:8000` |
+| CI/Staging | `https://api-staging.easyok.com` |
+| Production | `https://api.easyok.com` |
 
-**Request:**
+Use **[`environmentDetection.ts`](../frontend/src/utils/environmentDetection.ts:139)** for runtime detection.
+
+## 🏥 Health & Status Endpoints
+
+### GET /api/v1/health
+**Purpose:** Service health check and feature flag discovery  
+**Authentication:** Public  
+**Used by:** **[`environmentDetection.ts`](../frontend/src/utils/environmentDetection.ts:139)**
+
+#### Request
+```http
+GET /api/v1/health
+Accept: application/json
+```
+
+#### Response (200 OK)
 ```json
 {
-  "username": "string",
-  "password": "string"
+  "status": "healthy",
+  "timestamp": "2025-12-31T01:00:00.000Z",
+  "version": "1.0.0",
+  "features": {
+    "auth_enabled": true,
+    "rbac_enabled": true,
+    "training_pilot": false,
+    "semantic_cache": true,
+    "rate_limit": true,
+    "observability": true,
+    "sentry_monitoring": true
+  },
+  "immutable_toggles": ["AUTH_ENABLED", "RBAC_ENABLED"]
 }
 ```
 
-**Response (200):**
+#### Frontend Usage
+```typescript
+const config = await detectEnvironment();
+console.log('Backend features:', config.backend);
+```
+
+---
+
+## 🔑 Authentication Endpoints
+
+### POST /api/v1/auth/token
+**Purpose:** User login and token acquisition  
+**Authentication:** Public  
+**Used by:** Login components
+
+#### Request
+```http
+POST /api/v1/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username=user@example.com&password=secretpassword&grant_type=password
+```
+
+#### Response (200 OK)
 ```json
 {
-  "access_token": "eyJhbGc...",
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
   "token_type": "bearer",
   "expires_in": 3600
 }
 ```
 
-**Response (401):**
+#### Response (401 Unauthorized)
 ```json
 {
+  "message": "Invalid credentials",
   "error_code": "INVALID_CREDENTIALS",
-  "message": "Username or password incorrect"
+  "trace_id": "req_1704067200_abcd1234"
 }
 ```
 
-**Behavior:**
-- Returns immediately (no async operation)
-- Token valid for `JWT_EXPIRATION_MINUTES` (from settings)
-- When `AUTH_ENABLED=false`: endpoint returns dummy token (always succeeds)
+#### Frontend Usage
+```typescript
+const tokenManager = getTokenManager();
+const response = await fetch('/api/v1/auth/token', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  body: new URLSearchParams({ username, password, grant_type: 'password' })
+});
 
----
-
-### `GET /auth/me`
-
-**Purpose:** Get current session info and permissions.
-
-**Response (200):**
-```json
-{
-  "user_id": "uuid",
-  "username": "string",
-  "roles": ["admin", "editor"],
-  "permissions": ["query.execute", "admin.settings.read"],
-  "expires_at": "2025-01-01T12:00:00Z"
+if (response.ok) {
+  const { access_token } = await response.json();
+  tokenManager.setToken(access_token);
 }
 ```
 
-**Response (401):**
+### POST /api/v1/auth/refresh
+**Purpose:** Token refresh to extend session  
+**Authentication:** Required (Bearer token)  
+**Used by:** **[`TokenManager`](../frontend/src/api/tokenManager.ts:33)**
+
+#### Request
+```http
+POST /api/v1/auth/refresh
+Authorization: Bearer <current_token>
+Content-Type: application/json
+```
+
+#### Response (200 OK)
 ```json
 {
-  "error_code": "UNAUTHORIZED",
-  "message": "Invalid or expired token"
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "expires_in": 3600,
+  "token_type": "bearer"
 }
 ```
 
-**Header Required:** `Authorization: Bearer <token>`
-
-**Behavior:**
-- Returns empty permissions if `RBAC_ENABLED=false`
-- Token must be in `Authorization` header as `Bearer <token>`
-
----
-
-### `POST /auth/logout`
-
-**Purpose:** Invalidate session.
-
-**Response (204):** No content (success)
-
-**Header Required:** `Authorization: Bearer <token>`
-
----
-
-### `POST /auth/validate`
-
-**Purpose:** Internal token validation (use `/auth/me` for UX).
-
-**Header Required:** `Authorization: Bearer <token>`
-
-**Response (200):**
+#### Response (401 Unauthorized)
 ```json
 {
-  "valid": true,
-  "expires_at": "2025-01-01T12:00:00Z"
+  "message": "Refresh token expired",
+  "error_code": "TOKEN_EXPIRED",
+  "trace_id": "req_1704067200_efgh5678"
 }
+```
+
+#### Frontend Usage
+```typescript
+// Automatic handling via TokenManager
+const validToken = await tokenManager.ensureValidToken();
 ```
 
 ---
 
-## Query Endpoints
+## 💬 Chat & Query Endpoints
 
-### `POST /ask` (STREAMING — NDJSON)
+### POST /api/v1/chat/ask
+**Purpose:** Submit question and receive streaming NDJSON response  
+**Authentication:** Required  
+**Used by:** **[`Chat`](../frontend/src/components/Chat.tsx:38)** component
 
-**Purpose:** Execute governed query with streaming NDJSON response.
+#### Request
+```http
+POST /api/v1/chat/ask
+Authorization: Bearer <token>
+Content-Type: application/json
 
-**Request:**
-```json
 {
-  "question": "How many users registered last month?",
-  "stream": true,
+  "question": "What are the top 5 customers by revenue?",
+  "stream": true
+}
+```
+
+#### Response (200 OK - NDJSON Stream)
+```
+{"type": "thinking", "trace_id": "trace_abc123", "timestamp": "2025-12-31T01:00:00.000Z", "payload": {"content": "Analyzing customer revenue data..."}}
+{"type": "technical_view", "trace_id": "trace_abc123", "timestamp": "2025-12-31T01:00:01.000Z", "payload": {"sql": "SELECT customer_name, SUM(order_value) as revenue FROM orders GROUP BY customer_name ORDER BY revenue DESC LIMIT 5", "assumptions": ["Using latest order data", "Excluding cancelled orders"], "is_safe": true, "policy_hash": "policy_v1_abc123"}}
+{"type": "data", "trace_id": "trace_abc123", "timestamp": "2025-12-31T01:00:02.000Z", "payload": [{"customer_name": "ACME Corp", "revenue": 150000}, {"customer_name": "Tech Solutions", "revenue": 120000}]}
+{"type": "business_view", "trace_id": "trace_abc123", "timestamp": "2025-12-31T01:00:03.000Z", "payload": {"text": "Based on the analysis, ACME Corp is your top customer...", "metrics": {"total_customers": 2, "total_revenue": 270000}}}
+{"type": "end", "trace_id": "trace_abc123", "timestamp": "2025-12-31T01:00:04.000Z", "payload": {"message": "Query completed successfully", "total_chunks": 5}}
+```
+
+#### Error Response (Stream)
+```
+{"type": "error", "trace_id": "trace_abc123", "timestamp": "2025-12-31T01:00:05.000Z", "payload": {"message": "Table 'customers' access denied", "error_code": "TABLE_ACCESS_DENIED", "details": {"table": "customers", "required_permission": "READ"}}}
+{"type": "end", "trace_id": "trace_abc123", "timestamp": "2025-12-31T01:00:06.000Z", "payload": {"message": "Query failed", "total_chunks": 2}}
+```
+
+#### Frontend Usage
+```typescript
+const { start } = useEasyStream();
+await start({ question: userQuestion, stream: true }, handleChunk);
+```
+
+### POST /api/v1/chat/feedback
+**Purpose:** Submit feedback on query results  
+**Authentication:** Required  
+**Used by:** **[`TechnicalViewPanel`](../frontend/src/components/TechnicalViewPanel.tsx:30)** feedback
+
+#### Request
+```http
+POST /api/v1/chat/feedback
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "trace_id": "trace_abc123",
+  "feedback_type": "incorrect_result",
+  "message": "The SQL query returned wrong data",
   "context": {
-    "tenant_id": "optional_tenant_uuid"
+    "sql": "SELECT...",
+    "expected": "Different results",
+    "actual": "Current results"
   }
 }
 ```
 
-**Response (200) — NDJSON Stream:**
-
-Each line is a JSON object:
-
-```
-{"type":"thinking","trace_id":"uuid","timestamp":"2025-01-01T12:00:00Z","status":"Analyzing question..."}
-{"type":"technical_view","trace_id":"uuid","timestamp":"...","sql":"SELECT COUNT(*) FROM users...","assumptions":["Column 'registered_at' exists"],"policy_hash":"abc123"}
-{"type":"data","trace_id":"uuid","timestamp":"...","columns":["COUNT(*)"],"rows":[[150]],"row_count":1}
-{"type":"business_view","trace_id":"uuid","timestamp":"...","summary":"150 users registered last month","chart_config":{...}}
-{"type":"end","trace_id":"uuid","timestamp":"...","duration_ms":245}
-```
-
-**Chunk Order (STRICT):**
-1. `thinking` — Processing status
-2. `technical_view` — SQL + assumptions (MUST appear before data)
-3. `data` — Query results (optional if no data)
-4. `business_view` — Summary + chart (optional)
-5. `end` — Stream termination
-
-**On Error (Stream Already Started):**
-```
-{"type":"thinking","trace_id":"uuid","timestamp":"...","status":"Preparing..."}
-{"type":"error","trace_id":"uuid","timestamp":"...","error_code":"SQL_EXECUTION_FAILED","message":"Table 'users' not found in policy"}
-{"type":"end","trace_id":"uuid","timestamp":"...","duration_ms":123}
-```
-
-**Response (403) — Pre-stream Policy Violation:**
+#### Response (201 Created)
 ```json
 {
-  "error_code": "POLICY_VIOLATION",
-  "message": "Question references out-of-scope tables: [users]"
+  "feedback_id": "feedback_xyz789",
+  "trace_id": "trace_abc123",
+  "status": "received",
+  "message": "Feedback submitted successfully"
 }
 ```
 
-**Response (429) — Rate Limited:**
-```json
-{
-  "error_code": "RATE_LIMIT_EXCEEDED",
-  "message": "60 requests per minute exceeded"
-}
+#### Frontend Usage
+```typescript
+const submitFeedback = async (traceId: string, message: string) => {
+  await fetch('/api/v1/chat/feedback', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${await getValidToken()}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      trace_id: traceId,
+      feedback_type: 'incorrect_result',
+      message
+    })
+  });
+};
 ```
-
-**Header Required:** `Authorization: Bearer <token>` (if `AUTH_ENABLED=true`)
-
-**Behavior:**
-- Stream is **stateful** — headers are sent only once
-- Frontend MUST consume stream in order (no reordering)
-- `trace_id` is unique per request (for audit/correlation)
-- If stream breaks, client MUST resend (no retry built into protocol)
-- `policy_hash` indicates which policy version validated the query
-- When `STREAM_PROTOCOL=ndjson`: returns NDJSON (current)
-- When `STREAM_PROTOCOL=sse`: returns Server-Sent Events (alternative)
 
 ---
 
-## Admin Endpoints
+## 📊 Training & Admin Endpoints
 
-### `GET /admin/settings/feature-toggles`
+### GET /api/v1/training/items
+**Purpose:** Get training items for review  
+**Authentication:** Required (RBAC: admin)  
+**Used by:** Training admin components
 
-**Purpose:** List all feature toggles.
+#### Request
+```http
+GET /api/v1/training/items?status=pending&limit=50
+Authorization: Bearer <token>
+```
 
-**Response (200):**
+#### Response (200 OK)
 ```json
 {
-  "toggles": [
+  "items": [
     {
-      "feature": "ENABLE_TRAINING_PILOT",
-      "enabled": true,
-      "mutable": true,
-      "reason": "Training pilot active for v16.7",
-      "updated_at": "2025-01-01T12:00:00Z",
-      "updated_by": "admin@example.com"
+      "id": "training_001",
+      "question": "Show me sales data",
+      "sql": "SELECT * FROM sales",
+      "status": "pending",
+      "created_at": "2025-12-31T01:00:00.000Z",
+      "feedback_count": 3
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 50
+}
+```
+
+#### Frontend Usage
+```typescript
+const trainingEnabled = useFeatureFlag('ENABLE_TRAINING_PILOT');
+const canAccess = useAllFeatureFlags(['AUTH_ENABLED', 'RBAC_ENABLED']);
+
+if (trainingEnabled && canAccess) {
+  const items = await fetchTrainingItems();
+}
+```
+
+### POST /api/v1/training/approve/{item_id}
+**Purpose:** Approve training item  
+**Authentication:** Required (RBAC: admin)
+
+#### Request
+```http
+POST /api/v1/training/approve/training_001
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "approved": true,
+  "notes": "SQL looks correct for this use case"
+}
+```
+
+#### Response (200 OK)
+```json
+{
+  "item_id": "training_001",
+  "status": "approved",
+  "approved_by": "admin@example.com",
+  "approved_at": "2025-12-31T01:00:00.000Z"
+}
+```
+
+---
+
+## ⚙️ Admin Feature Toggle Endpoints
+
+### GET /api/v1/admin/feature-toggles
+**Purpose:** Get current feature toggle states  
+**Authentication:** Required (RBAC: admin)  
+**Used by:** Admin feature toggle panel
+
+#### Request
+```http
+GET /api/v1/admin/feature-toggles
+Authorization: Bearer <token>
+```
+
+#### Response (200 OK)
+```json
+{
+  "toggles": {
+    "AUTH_ENABLED": {
+      "value": true,
+      "immutable": true,
+      "description": "Enable authentication system"
+    },
+    "ENABLE_TRAINING_PILOT": {
+      "value": false,
+      "immutable": false,
+      "description": "Enable training pilot features"
+    }
+  },
+  "immutable_toggles": ["AUTH_ENABLED", "RBAC_ENABLED"]
+}
+```
+
+#### Frontend Usage
+```typescript
+const immutableToggles = useImmutableToggles();
+const isReadOnly = immutableToggles.includes('AUTH_ENABLED');
+```
+
+### PUT /api/v1/admin/feature-toggles/{toggle_name}
+**Purpose:** Update feature toggle value  
+**Authentication:** Required (RBAC: admin)
+
+#### Request
+```http
+PUT /api/v1/admin/feature-toggles/ENABLE_TRAINING_PILOT
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "value": true,
+  "reason": "Enabling for beta testing"
+}
+```
+
+#### Response (200 OK)
+```json
+{
+  "toggle_name": "ENABLE_TRAINING_PILOT",
+  "old_value": false,
+  "new_value": true,
+  "updated_by": "admin@example.com",
+  "updated_at": "2025-12-31T01:00:00.000Z"
+}
+```
+
+#### Response (400 Bad Request - Immutable Toggle)
+```json
+{
+  "message": "Feature toggle cannot be modified",
+  "error_code": "FEATURE_TOGGLE_IMMUTABLE",
+  "trace_id": "req_1704067200_ijkl9012",
+  "details": {
+    "toggle_name": "AUTH_ENABLED",
+    "reason": "This toggle is marked as immutable"
+  }
+}
+```
+
+---
+
+## 🔍 Analytics & Observability Endpoints
+
+### GET /api/v1/analytics/usage
+**Purpose:** Get usage analytics  
+**Authentication:** Required (RBAC: admin)  
+**Used by:** Analytics dashboard
+
+#### Request
+```http
+GET /api/v1/analytics/usage?date_range=7d&metric=query_count
+Authorization: Bearer <token>
+```
+
+#### Response (200 OK)
+```json
+{
+  "metric": "query_count",
+  "date_range": "7d",
+  "data": [
+    {
+      "date": "2025-12-31",
+      "value": 1250
+    },
+    {
+      "date": "2025-12-30", 
+      "value": 1100
+    }
+  ],
+  "total": 8750
+}
+```
+
+### GET /api/v1/observability/traces/{trace_id}
+**Purpose:** Get trace details for debugging  
+**Authentication:** Required  
+**Used by:** Error debugging
+
+#### Request
+```http
+GET /api/v1/observability/traces/trace_abc123
+Authorization: Bearer <token>
+```
+
+#### Response (200 OK)
+```json
+{
+  "trace_id": "trace_abc123",
+  "spans": [
+    {
+      "span_id": "span_001",
+      "operation": "query_generation",
+      "duration_ms": 150,
+      "status": "success"
+    }
+  ],
+  "total_duration_ms": 2300,
+  "status": "success"
+}
+```
+
+---
+
+## 📋 Query Catalog Endpoints
+
+### GET /api/v1/catalog/schemas
+**Purpose:** Get available database schemas  
+**Authentication:** Required  
+**Used by:** Schema selection components
+
+#### Request
+```http
+GET /api/v1/catalog/schemas
+Authorization: Bearer <token>
+```
+
+#### Response (200 OK)
+```json
+{
+  "schemas": [
+    {
+      "name": "sales",
+      "description": "Sales and customer data",
+      "table_count": 8,
+      "accessible": true
+    },
+    {
+      "name": "hr",
+      "description": "Human resources data", 
+      "table_count": 5,
+      "accessible": false
     }
   ]
 }
 ```
 
-**Header Required:** `Authorization: Bearer <admin_token>`
+### GET /api/v1/catalog/tables
+**Purpose:** Get accessible tables for query building  
+**Authentication:** Required
 
-**Permissions Required:** `admin.settings.read`
-
----
-
-### `POST /admin/settings/feature-toggle`
-
-**Purpose:** Toggle a feature (requires reason).
-
-**Request:**
-```json
-{
-  "feature": "ENABLE_SEMANTIC_CACHE",
-  "enabled": true,
-  "reason": "Enabling for performance testing"
-}
+#### Request
+```http
+GET /api/v1/catalog/tables?schema=sales
+Authorization: Bearer <token>
 ```
 
-**Response (200):**
+#### Response (200 OK)
 ```json
 {
-  "feature": "ENABLE_SEMANTIC_CACHE",
-  "enabled": true,
-  "updated_at": "2025-01-01T12:00:00Z"
-}
-```
-
-**Response (400) — Missing Reason:**
-```json
-{
-  "error_code": "INVALID_REQUEST",
-  "message": "Reason required (min 10 characters)"
-}
-```
-
-**Response (403) — Immutable Toggle:**
-```json
-{
-  "error_code": "IMMUTABLE_TOGGLE",
-  "message": "Feature AUTH_ENABLED is immutable in production"
-}
-```
-
-**Header Required:** `Authorization: Bearer <admin_token>`
-
-**Permissions Required:** `admin.settings.write`
-
----
-
-### `GET /admin/training`
-
-**Purpose:** List training items.
-
-**Query Parameters:**
-- `status`: `pending` | `approved` | `rejected` (optional)
-- `limit`: max results (default 20)
-- `offset`: pagination offset (default 0)
-
-**Response (200):**
-```json
-{
-  "items": [
+  "schema": "sales",
+  "tables": [
     {
-      "id": "uuid",
-      "question": "How many active users?",
-      "sql": "SELECT COUNT(*) FROM users WHERE active=1",
-      "status": "pending",
-      "created_at": "2025-01-01T10:00:00Z",
-      "created_by": "user@example.com"
+      "name": "customers",
+      "description": "Customer master data",
+      "column_count": 12,
+      "row_estimate": 50000,
+      "accessible": true
+    },
+    {
+      "name": "orders",
+      "description": "Order transactions",
+      "column_count": 8,
+      "row_estimate": 250000,
+      "accessible": true
     }
-  ],
-  "total": 42
+  ]
 }
 ```
-
-**Header Required:** `Authorization: Bearer <admin_token>`
-
-**Permissions Required:** `admin.training.read`
 
 ---
 
-### `POST /admin/training/{id}/approve`
+## 🚨 Error Responses
 
-**Purpose:** Approve a pending training item.
+All endpoints follow consistent error response format:
 
-**Request:**
+### Standard Error Schema
 ```json
 {
-  "notes": "Verified and correct"
-}
-```
-
-**Response (200):**
-```json
-{
-  "id": "uuid",
-  "status": "approved",
-  "approved_at": "2025-01-01T12:00:00Z",
-  "approved_by": "admin@example.com"
-}
-```
-
-**Header Required:** `Authorization: Bearer <admin_token>`
-
-**Permissions Required:** `admin.training.approve`
-
----
-
-### `POST /admin/training/{id}/reject`
-
-**Purpose:** Reject a pending training item.
-
-**Request:**
-```json
-{
-  "reason": "Contains unsafe SQL"
-}
-```
-
-**Response (200):**
-```json
-{
-  "id": "uuid",
-  "status": "rejected",
-  "rejected_at": "2025-01-01T12:00:00Z",
-  "rejected_by": "admin@example.com"
-}
-```
-
-**Header Required:** `Authorization: Bearer <admin_token>`
-
-**Permissions Required:** `admin.training.reject`
-
----
-
-## Feedback & Learning Endpoints
-
-### `POST /feedback`
-
-**Purpose:** Submit feedback on query result.
-
-**Request:**
-```json
-{
-  "trace_id": "uuid",
-  "is_valid": false,
-  "feedback_text": "Result is missing recent records"
-}
-```
-
-**Response (201):**
-```json
-{
-  "feedback_id": "uuid",
-  "created_at": "2025-01-01T12:00:00Z"
-}
-```
-
-**Behavior:**
-- Creates pending training item
-- Does NOT immediately train vector store
-- Must be approved by admin before injection
-- Audit logged as `feedback_submit`
-
----
-
-## Health & Status Endpoints
-
-### `GET /health`
-
-**Purpose:** Check backend health.
-
-**Response (200):**
-```json
-{
-  "status": "healthy",
-  "timestamp": "2025-01-01T12:00:00Z",
-  "components": {
-    "db": "healthy",
-    "llm": "healthy",
-    "vector_store": "healthy",
-    "cache": "degraded"
-  }
-}
-```
-
-**Behavior:**
-- Does NOT require authentication
-- When `HEALTH_AGGREGATION_MODE=strict`: returns 503 if any component fails
-- When `HEALTH_AGGREGATION_MODE=degraded`: returns 200 with component status
-
----
-
-## Error Handling
-
-### Standard Error Response
-
-All errors (except streaming) return JSON:
-
-```json
-{
-  "error_code": "UNIQUE_CODE",
-  "message": "Human-readable description",
+  "message": "Human-readable error description",
+  "error_code": "MACHINE_READABLE_CODE",
+  "trace_id": "req_1704067200_abcd1234",
   "details": {
-    "field": "question",
-    "context": "optional context object"
+    "field_name": "Additional context",
+    "suggested_action": "What user should do"
+  },
+  "retry_after": 30
+}
+```
+
+### Common Error Codes by Endpoint
+
+| Endpoint | Common Errors |
+|----------|---------------|
+| `/auth/token` | `INVALID_CREDENTIALS`, `RATE_LIMIT_EXCEEDED` |
+| `/auth/refresh` | `TOKEN_EXPIRED`, `TOKEN_INVALID` |
+| `/chat/ask` | `POLICY_VIOLATION`, `SQL_EXECUTION_FAILED`, `LLM_SERVICE_UNAVAILABLE` |
+| `/admin/feature-toggles` | `FEATURE_TOGGLE_IMMUTABLE`, `FORBIDDEN` |
+| `/training/*` | `TRAINING_VALIDATION_FAILED`, `TRAINING_ITEM_NOT_FOUND` |
+
+For complete error handling strategies, see **[`api/errors.md`](errors.md)**.
+
+---
+
+## 🔗 Frontend Integration Patterns
+
+### Token Management Integration
+```typescript
+// All API calls should use TokenManager for authentication
+const makeAuthenticatedRequest = async (url: string, options: RequestInit = {}) => {
+  const token = await getValidToken();
+  return fetch(url, {
+    ...options,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...options.headers
+    }
+  });
+};
+```
+
+### Error Handling Integration
+```typescript
+// Use ErrorHandler for consistent error processing
+const handleApiResponse = async (response: Response, requestId?: string) => {
+  if (!response.ok) {
+    const errorHandler = getErrorHandler();
+    const error = await ErrorHandler.parseErrorFromResponse(response);
+    const handling = await errorHandler.handleError(error, requestId);
+    
+    if (handling.shouldRetry) {
+      // Implement retry logic
+      await new Promise(resolve => setTimeout(resolve, handling.retryAfterMs));
+      return makeAuthenticatedRequest(response.url);
+    }
+    
+    throw new Error(handling.userMessage);
   }
-}
+  
+  return response.json();
+};
 ```
 
-### Common Error Codes
-
-| Code | Status | Meaning | Retry |
-|------|--------|---------|-------|
-| `INVALID_CREDENTIALS` | 401 | Login failed | No |
-| `UNAUTHORIZED` | 401 | No token or expired | No |
-| `POLICY_VIOLATION` | 403 | Out-of-scope question | No |
-| `RATE_LIMIT_EXCEEDED` | 429 | Too many requests | Yes (exponential backoff) |
-| `SQL_EXECUTION_FAILED` | 500 | Query execution error | Depends on cause |
-| `SERVICE_UNAVAILABLE` | 503 | Backend degraded | Yes |
-
----
-
-## CORS & Headers
-
-### Allowed Origins
-
-Set via `CORS_ORIGINS` environment variable (space-separated list).
-
-Example:
-```
-CORS_ORIGINS=http://localhost:5173 https://easydata.example.com
+### Feature Flag Integration
+```typescript
+// Check features before making admin requests
+const AdminComponent = () => {
+  const hasAdminAccess = useAllFeatureFlags(['AUTH_ENABLED', 'RBAC_ENABLED']);
+  
+  const handleToggleUpdate = async (toggleName: string, value: boolean) => {
+    if (!hasAdminAccess) {
+      throw new Error('Admin access required');
+    }
+    
+    await makeAuthenticatedRequest(`/api/v1/admin/feature-toggles/${toggleName}`, {
+      method: 'PUT',
+      body: JSON.stringify({ value })
+    });
+  };
+  
+  return hasAdminAccess ? <AdminPanel /> : <AccessDenied />;
+};
 ```
 
-### Required Headers (Requests)
+---
 
-| Header | Required | Example |
-|--------|----------|---------|
-| `Authorization` | If `AUTH_ENABLED=true` | `Bearer eyJhbGc...` |
-| `Content-Type` | For POST/PUT | `application/json` |
+## 📚 Related Documentation
 
-### Response Headers
-
-| Header | Meaning |
-|--------|---------|
-| `X-Trace-ID` | Correlation ID (matches trace_id in NDJSON) |
-| `X-Policy-Version` | Active schema policy version |
-| `Content-Type` | `application/json` or `application/x-ndjson` |
+- **[`streaming.md`](streaming.md)** - NDJSON streaming protocol details
+- **[`errors.md`](errors.md)** - Complete error handling guide
+- **[`../environment/frontend-behavior.md`](../environment/frontend-behavior.md)** - Feature flag behavior matrix
+- **[`../governance/frontend-rules.md`](../governance/frontend-rules.md)** - API usage governance rules
 
 ---
 
-## Local Development
+## 🔄 API Versioning
 
-When running locally with `AUTH_ENABLED=false`:
+All endpoints use `/api/v1/` prefix. Breaking changes will increment the version number. The frontend should handle version detection via the health endpoint.
 
-1. **Login endpoint returns dummy token:**
-   ```json
-   {
-     "access_token": "local_dev_token",
-     "token_type": "bearer",
-     "expires_in": 999999
-   }
-   ```
+### Version Compatibility
+- **v1.x** - Current stable version
+- **v2.x** - Future version (backward compatibility maintained)
 
-2. **`/auth/me` returns stub user:**
-   ```json
-   {
-     "user_id": "00000000-0000-0000-0000-000000000000",
-     "username": "local_dev",
-     "roles": ["admin"],
-     "permissions": ["*"]
-   }
-   ```
-
-3. **All endpoints succeed regardless of token validity.**
-
----
-
-## Testing Endpoints
-
-When `ENABLE_TRAINING_PILOT=true`, additional endpoints are available:
-
-### `POST /admin/sandbox/execute`
-
-Execute queries in isolated sandbox (data not persisted).
-
-**Request:**
-```json
-{
-  "sql": "SELECT * FROM users LIMIT 5"
-}
-```
-
-**Response:** Same NDJSON stream as `/ask`.
-
----
-
-## Rate Limiting
-
-**Default:** 60 requests per minute (per user)
-
-Configure via:
-- `RATE_LIMIT_REQUESTS_PER_MINUTE`
-- `RATE_LIMIT_SCOPE` (`user` | `ip` | `global`)
-
-When limit exceeded: HTTP 429 with `Retry-After` header.
-
----
-
-## Summary
-
-| Endpoint | Purpose | Auth | Stream |
-|----------|---------|------|--------|
-| `POST /auth/login` | Get token | No | No |
-| `GET /auth/me` | Session info | Yes | No |
-| `POST /ask` | Query execution | Conditional | **YES** |
-| `GET /admin/settings/feature-toggles` | List toggles | Yes (admin) | No |
-| `POST /admin/settings/feature-toggle` | Update toggle | Yes (admin) | No |
-| `GET /admin/training` | List training items | Yes (admin) | No |
-| `POST /admin/training/{id}/approve` | Approve training | Yes (admin) | No |
-| `POST /feedback` | Submit feedback | Yes | No |
-| `GET /health` | Health check | No | No |
-
+Monitor the `version` field in health endpoint responses for API version updates.

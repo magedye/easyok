@@ -1,399 +1,327 @@
-# Backend → Frontend Handoff (Complete)
+# Frontend Architecture & Implementation Handoff
 
-**Status:** ✅ READY FOR FRONTEND DEVELOPMENT  
-**Authority:** Architecture Post-Stage-6  
-**Version:** 16.7.9  
-**Date:** 2025-01-01
+**Target Audience:** Frontend Developers, Code Reviewers, CI Governance  
+**Last Updated:** 2025-12-31  
+**Version:** Phase 4 - Documentation Suite  
 
----
+## 📋 Executive Summary
 
-## Executive Summary
+This document provides a comprehensive overview of the frontend architecture, implementation phases, governance compliance, and streaming contract for the EasyOK platform. The frontend has been designed to work seamlessly with the backend while maintaining strict governance compliance and robust error handling.
 
-Frontend development can now begin **independently and safely**.
+## 🎯 Quick Start for New Developers
 
-This document consolidates the **binding contracts** between Backend and Frontend.
+### Prerequisites
+- Node.js 18+ 
+- npm/yarn
+- Basic understanding of React 18 + TypeScript
+- Familiarity with NDJSON streaming
 
-**Frontend engineers must treat these documents as authoritative.** Violating them requires architecture review.
-
----
-
-## What You're Getting
-
-### ✅ API Contract (Definitive)
-
-**File:** `docs/api/endpoints.md`
-
-Complete specification of:
-- All 9+ endpoints (auth, query, admin, feedback)
-- Request/response schemas
-- HTTP status codes
-- Permission requirements
-- Local dev behavior (AUTH_ENABLED=false)
-
-**Key Endpoints:**
-| Endpoint | Purpose | Auth |
-|----------|---------|------|
-| `POST /auth/login` | Get JWT | No |
-| `POST /ask` | Execute query (**NDJSON**) | Conditional |
-| `GET /admin/settings/feature-toggles` | List toggles | Admin |
-| `POST /admin/training/{id}/approve` | Approve item | Admin |
-| `POST /feedback` | Submit feedback | Yes |
-
----
-
-### ✅ Streaming Protocol (Rigid Order)
-
-**File:** `docs/api/streaming.md`
-
-NDJSON streaming specification with **immutable chunk order**:
-
-```
-1. thinking          (always first, always 1)
-2. technical_view    (always second, always 1)
-3. data              (optional, always after technical_view)
-4. business_view     (optional, after data)
-5. end               (always last, always 1)
-```
-
-On error:
-```
-1. thinking
-2. error
-3. end
-```
-
-**Critical:** Frontend MUST NOT reorder chunks or skip validation.
-
----
-
-### ✅ Environment Matrix (Auto-Detect)
-
-**File:** `docs/environment/frontend-behavior.md`
-
-How backend behaves in each environment:
-
-| Flag | Local | CI | Prod | Action |
-|------|-------|----|----|--------|
-| `AUTH_ENABLED` | ❌ | ✅ | ✅ | Show/hide login |
-| `RBAC_ENABLED` | ❌ | ✅ | ✅ | Show/hide admin |
-| `ENABLE_TRAINING_PILOT` | ✅ | ❌ | ❌ | Show/hide training |
-| `ENABLE_RATE_LIMIT` | ❌ | ❌ | ✅ | Implement backoff |
-| `ENABLE_SEMANTIC_CACHE` | ❌ | ❌ | ✅ | Show cache notice |
-
-**Frontend must detect at runtime** (not hardcode assumptions).
-
----
-
-### ✅ Error Handling (Comprehensive)
-
-**File:** `docs/api/errors.md`
-
-Error codes, status codes, retry logic:
-
-| Code | Status | Meaning | Retry |
-|------|--------|---------|-------|
-| `POLICY_VIOLATION` | 403 | Out-of-scope question | ❌ |
-| `UNAUTHORIZED` | 401 | No/expired token | ❌ (redirect login) |
-| `RATE_LIMIT_EXCEEDED` | 429 | 60 req/min exceeded | ✅ (exponential backoff) |
-| `SQL_EXECUTION_FAILED` | 500 | DB error | Maybe |
-| `SERVICE_UNAVAILABLE` | 503 | Backend down | ✅ |
-
-**All errors include `error_code`, `message`, and `details`.**
-
----
-
-### ✅ Governance Rules (Hard Constraints)
-
-**File:** `docs/governance/frontend-rules.md`
-
-**10 HARD RULES** (violating = PR blocked):
-
-1. ❌ **No SQL generation** — Display only
-2. ❌ **No permission inference** — Trust backend 403
-3. ❌ **No RLS logic** — Backend filters
-4. ❌ **No caching logic** — Backend handles
-5. ❌ **No assumption modification** — Backend generates
-6. ❌ **No secret storage** — Use sessionStorage/HttpOnly
-7. ❌ **No response reordering** — Process chunks in order
-8. ❌ **No unauthorized mutation** — Always request backend first
-9. ❌ **No policy caching** — Always fetch fresh
-10. ❌ **No hardcoded env assumptions** — Detect at runtime
-
-**Golden Rule:** Frontend is a **visibility window**, not a **logic engine**.
-
----
-
-### ✅ Development Setup (Complete)
-
-**File:** `docs/development/frontend-dev-setup.md`
-
-Step-by-step:
-- Node.js, npm install, `.env.local` template
-- Backend configuration for local dev
-- Unit tests, E2E tests, mock API mode
-- Debugging tools (DevTools, VS Code, curl examples)
-- Common issues & solutions
-- Deployment checklist
-
----
-
-## Document Map
-
-```
-docs/
-├── api/
-│   ├── endpoints.md           ← All API routes + schemas
-│   ├── streaming.md           ← NDJSON protocol (chunk order)
-│   └── errors.md              ← Error codes + retry logic
-├── environment/
-│   └── frontend-behavior.md   ← Env matrix (local/ci/prod)
-├── governance/
-│   └── frontend-rules.md      ← 10 hard constraints
-├── development/
-│   └── frontend-dev-setup.md  ← Local setup + testing
-└── FRONTEND_HANDOFF.md        ← This file
-```
-
----
-
-## What You DON'T Need
-
-❌ **OpenAPI spec generation** — Already have `openapi/fortress.yaml`, don't reverse-engineer  
-❌ **Backend assumptions** — Detect behavior at runtime  
-❌ **Permission logic** — Backend returns 403, you handle it  
-❌ **Error invention** — Use error codes from `errors.md`  
-❌ **Custom streaming logic** — Use NDJSON library (msw, fetch, etc.)  
-
----
-
-## Quick Start
-
-### 1. Backend Running?
-
+### 5-Minute Setup
 ```bash
-# In backend root
-source .venv/bin/activate
-python main.py
-
-# Should say: Uvicorn running on http://0.0.0.0:8000
-```
-
-### 2. Frontend Setup
-
-```bash
-cd frontend/
+# 1. Install dependencies
 npm install
+
+# 2. Copy environment template
 cp .env.example .env.local
 
-# Edit .env.local:
-VITE_API_BASE_URL=http://localhost:8000/api/v1
-VITE_USE_MOCK_API=false  # Use real backend
-VITE_ENV=development
-```
-
-### 3. Start Dev Server
-
-```bash
+# 3. Start development server
 npm run dev
 
-# Output: Local:   http://localhost:5173/
+# 4. Visit http://localhost:5173
+# Frontend automatically detects backend configuration
 ```
 
-### 4. Test Connection
+### Key Concepts to Understand
+1. **[`ChunkType`](frontend/src/types/streaming.ts:8)** - Strict enum for NDJSON chunk types
+2. **[`StreamValidator`](frontend/src/utils/streamingValidator.ts:25)** - Enforces backend streaming contract
+3. **[`useFeatureFlag()`](frontend/src/hooks/useFeatureFlag.ts:139)** - Runtime feature detection
+4. **[`TokenManager`](frontend/src/api/tokenManager.ts:33)** - Thread-safe token management
+5. **[`GovernanceValidator`](frontend/src/utils/governanceValidator.ts:188)** - Prevents rule violations
 
+## 🏗️ Architecture Overview
+
+### Implementation Phases Completed
+
+#### Phase 1: Foundation & Type Safety ✅
+- **[`ChunkType`](frontend/src/types/streaming.ts:8)** enum for type-safe streaming
+- **[`StreamValidator`](frontend/src/utils/streamingValidator.ts:25)** for contract enforcement
+- **[`EnvironmentDetection`](frontend/src/utils/environmentDetection.ts:139)** system (hybrid build-time + runtime)
+- **[`useFeatureFlag()`](frontend/src/hooks/useFeatureFlag.ts:139)** hook for centralized feature access
+- **[`GovernanceValidator`](frontend/src/utils/governanceValidator.ts:188)** with override mechanism
+
+#### Phase 2: Robust API Layer ✅
+- **[`TokenManager`](frontend/src/api/tokenManager.ts:33)** with race condition prevention
+- **[`ErrorHandler`](frontend/src/api/errorHandler.ts:212)** for all 25+ documented error codes
+- **[`EasyStream`](frontend/src/api/easyStream.ts)** client with recovery strategy
+- Retry logic with exponential backoff
+- Trace ID correlation for debugging
+
+#### Phase 3: Enhanced Components ✅
+- **[`Chat`](frontend/src/components/Chat.tsx:38)** component with enhanced streaming validation
+- **[`TechnicalViewPanel`](frontend/src/components/TechnicalViewPanel.tsx:30)** read-only display (Governance Rule #1)
+- **[`ErrorDisplay`](frontend/src/components/ErrorDisplay.tsx)** with user-friendly messages
+- Feature-flag driven rendering
+
+### Core Architecture Principles
+
+1. **Contract-First Development:** All components follow documented API contracts
+2. **Type-Safe Streaming:** [`ChunkType`](frontend/src/types/streaming.ts:8) enum prevents string literal errors
+3. **Runtime Adaptation:** Environment detection enables dynamic behavior
+4. **Security-First:** Tokens in sessionStorage only, no localStorage secrets
+5. **Governance Enforcement:** Automated validation prevents rule violations
+
+## 📡 Streaming Contract Summary
+
+### Chunk Flow
+```
+thinking → technical_view → data → business_view → end
+   ↓           ↓           ↓           ↓          ↓
+[Required]  [Optional]  [Optional]  [Optional] [Required]
+
+Error chunks can occur at any point, followed by end
+```
+
+### Type-Safe Implementation
+```typescript
+// ✅ Type-safe with enum
+const chunkType = ChunkType.TECHNICAL_VIEW;
+
+// ❌ Error-prone string literals
+const chunkType = "technical_view"; 
+```
+
+### Validation Example
+```typescript
+const validator = new StreamValidator();
+
+for (const chunk of streamChunks) {
+  const validation = validator.validateChunkOrder(chunk);
+  if (!validation.valid) {
+    throw new Error(`Contract violation: ${validation.error}`);
+  }
+}
+```
+
+## 🔐 Security & Token Management
+
+### Thread-Safe Token Refresh
+The **[`TokenManager`](frontend/src/api/tokenManager.ts:33)** prevents race conditions:
+
+```typescript
+// Multiple simultaneous calls share the same refresh promise
+const token1 = await tokenManager.ensureValidToken();
+const token2 = await tokenManager.ensureValidToken(); // Waits for same refresh
+```
+
+### Storage Compliance (Governance Rule #6)
+```typescript
+// ✅ Compliant - clears on browser close
+sessionStorage.setItem('session_token', token);
+
+// ❌ Governance violation
+localStorage.setItem('token', token);
+```
+
+## 🛡️ Governance Compliance
+
+### The 10 Hard Rules
+Our frontend strictly enforces these governance rules:
+
+1. **No SQL Generation** - Display only, never parse/modify SQL
+2. **No Permission Inference** - Backend decides all permissions
+3. **No RLS Logic** - Backend handles row-level security
+4. **No Custom Caching** - Use documented cache patterns only
+5. **No Assumption Inference** - Display assumptions read-only
+6. **No Secret Storage in localStorage** - Use sessionStorage only
+7. **No Response Reordering** - Process chunks in received order
+8. **No Unauthorized Mutation** - Wait for backend confirmation
+9. **No Policy Caching** - Fetch fresh policy data
+10. **No Hardcoded Environment Assumptions** - Runtime detection
+
+### Override Mechanism
+For legitimate edge cases:
+```typescript
+/**
+ * @governance-ignore-next-line rule=no-sql-generation reason="Display only - no parsing"
+ * @approved_by="lead-developer" expires="2024-06-01"
+ */
+<pre>{sqlCode}</pre>
+```
+
+## 🎯 Feature Flag System
+
+### Centralized Access Pattern
+```typescript
+export function TrainingPanel() {
+  const trainingEnabled = useFeatureFlag('ENABLE_TRAINING_PILOT');
+  const canAccess = useAllFeatureFlags(['AUTH_ENABLED', 'RBAC_ENABLED']);
+  
+  if (!trainingEnabled) {
+    return <ComingSoonBanner feature="Training Pilot" />;
+  }
+  
+  if (!canAccess) {
+    return <AccessDeniedNotice />;
+  }
+  
+  return <TrainingUI />;
+}
+```
+
+### Environment Matrix
+| Feature | Local | CI | Production |
+|---------|-------|----|-----------| 
+| `AUTH_ENABLED` | `false` | `true` | `true` |
+| `RBAC_ENABLED` | `false` | `true` | `true` |
+| `ENABLE_TRAINING_PILOT` | `true` | `true` | `false` |
+| `ENABLE_SEMANTIC_CACHE` | `false` | `true` | `true` |
+| `ENABLE_RATE_LIMIT` | `false` | `true` | `true` |
+
+## 🔧 Error Handling Strategy
+
+### Complete Error Code Coverage
+The **[`ErrorHandler`](frontend/src/api/errorHandler.ts:212)** handles all documented backend errors:
+
+- **Authentication:** `INVALID_CREDENTIALS`, `UNAUTHORIZED`, `TOKEN_EXPIRED`
+- **Authorization:** `FORBIDDEN`, `TABLE_ACCESS_DENIED`, `COLUMN_ACCESS_DENIED`
+- **Rate Limiting:** `RATE_LIMIT_EXCEEDED`, `CONCURRENT_REQUEST_LIMIT`
+- **Execution:** `SQL_EXECUTION_FAILED`, `QUERY_TIMEOUT`, `DATABASE_CONNECTION_FAILED`
+- **Infrastructure:** `SERVICE_UNAVAILABLE`, `INTERNAL_SERVER_ERROR`, `GATEWAY_TIMEOUT`
+- **Streaming:** `STREAMING_INTERRUPTED`, `CHUNK_ORDER_VIOLATION`
+
+### Retry Logic with Backoff
+```typescript
+const retryConfig = {
+  maxAttempts: 5,
+  baseDelayMs: 1000,
+  exponential: true,
+  jitterMs: 500
+};
+
+// Exponential backoff: 1s → 2s → 4s → 8s → 16s (+ jitter)
+```
+
+## 📚 Reference Documentation
+
+For detailed implementation guidance, refer to:
+
+- **[`api/endpoints.md`](docs/api/endpoints.md)** - Complete API contract
+- **[`api/streaming.md`](docs/api/streaming.md)** - NDJSON protocol specification  
+- **[`api/errors.md`](docs/api/errors.md)** - Error codes & handling
+- **[`environment/frontend-behavior.md`](docs/environment/frontend-behavior.md)** - Feature flag matrix
+- **[`governance/frontend-rules.md`](docs/governance/frontend-rules.md)** - 10 hard governance rules
+- **[`development/frontend-dev-setup.md`](docs/development/frontend-dev-setup.md)** - Local setup & debugging
+
+## 🧪 Testing Strategy
+
+### Critical Coverage Areas
+- **[`StreamValidator`](frontend/src/utils/streamingValidator.ts:25)** - 100% coverage (contract enforcement)
+- **[`ErrorHandler`](frontend/src/api/errorHandler.ts:212)** - 100% coverage (all error codes)  
+- **[`TokenManager`](frontend/src/api/tokenManager.ts:33)** - 100% coverage (race conditions)
+- **Components** - 80%+ coverage
+
+### Key Test Scenarios
+1. **Chunk Order Violations** - Must throw errors
+2. **Trace ID Consistency** - Across all chunks
+3. **Token Refresh Races** - Multiple simultaneous calls
+4. **Stream Recovery** - After network interruption
+5. **Error Code Handling** - All 25+ documented codes
+
+## 🚀 CI/CD Integration
+
+### Mandatory PR Checklist
+Every Pull Request must verify:
+- [ ] No SQL generation/parsing in code
+- [ ] No permission inference logic
+- [ ] Tokens stored in sessionStorage only  
+- [ ] [`ChunkType`](frontend/src/types/streaming.ts:8) enum used (not strings)
+- [ ] Stream validation with **[`StreamValidator`](frontend/src/utils/streamingValidator.ts:25)**
+- [ ] All error codes handled
+- [ ] Feature flags accessed via **[`useFeatureFlag()`](frontend/src/hooks/useFeatureFlag.ts:139)**
+
+### Automated Governance Check
 ```bash
-# In browser console:
-const r = await fetch('http://localhost:8000/api/v1/health');
-console.log(await r.json());
+# Runs on every PR
+npm run lint:governance
 ```
 
-### 5. Try First Query
+Fails if:
+- Governance violations found without valid override
+- Override missing required reason
+- Override expired
+- Token storage violations
 
-- Open http://localhost:5173
-- Enter: "How many users?" (or any question)
-- Watch NDJSON chunks arrive in order
-- Check browser Network tab for `/api/v1/ask`
+## 🎯 Success Metrics
 
----
+### Definition of Done
+- ✅ All API calls match documented contracts
+- ✅ Streaming follows [`ChunkType`](frontend/src/types/streaming.ts:8) order
+- ✅ Zero governance violations
+- ✅ 90%+ test coverage on critical modules
+- ✅ All error codes handled
+- ✅ Token refresh race conditions prevented
+- ✅ Stream recovery implemented
 
-## Key Decisions Already Made
+### Quality Gates
+- ✅ ESLint: 0 errors
+- ✅ TypeScript: 0 errors  
+- ✅ Governance linter: passing
+- ✅ E2E tests: passing
+- ✅ Accessibility score: 90+
+- ✅ Performance: 80+ (Lighthouse)
 
-### 1. Streaming: NDJSON (Not SSE)
+## 🔍 Debugging Guide
 
-**Why:** Ordered, discrete chunks. Easier to parse and validate.
-
-**Format:** One JSON object per line.
-
-**Order:** `thinking` → `technical_view` → `data` (optional) → `business_view` (optional) → `end`
-
----
-
-### 2. Authentication: JWT (Bearer Token)
-
-**When needed:** Only if `AUTH_ENABLED=true` (not in local dev).
-
-**In local dev:** Auth is disabled; all endpoints succeed.
-
-**In production:** Tokens required in `Authorization: Bearer <token>` header.
-
----
-
-### 3. Admin UI: Feature-Gated
-
-**Training Tab:** Only if `ENABLE_TRAINING_PILOT=true` (local only).
-
-**Feature Toggles Panel:** Only if `RBAC_ENABLED=true` AND user has `admin.settings.read`.
-
----
-
-### 4. Rate Limiting: Client-Side Backoff
-
-**When:** `ENABLE_RATE_LIMIT=true` (production).
-
-**Response:** HTTP 429 with `Retry-After` header.
-
-**Frontend:** Exponential backoff (max 5 retries).
-
----
-
-### 5. Semantic Cache: Transparent
-
-**Indicator:** `X-Cache: HIT` header if result served from cache.
-
-**Frontend:** Can show notice ("Result from cache, may not be current").
-
-**Don't rely on:** Don't cache in frontend; backend handles freshness.
-
----
-
-## Testing Endpoints Without Frontend
-
-Use `curl` to validate backend:
-
-```bash
-# 1. Login
-TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"test","password":"test"}' | jq -r .access_token)
-
-# 2. Ask query (streaming NDJSON)
-curl -X POST http://localhost:8000/api/v1/ask \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"question":"How many users?"}' \
-  --http2
-
-# 3. List toggles (admin)
-curl -X GET http://localhost:8000/api/v1/admin/settings/feature-toggles \
-  -H "Authorization: Bearer $TOKEN"
+### Stream Issues
+```typescript
+// Enable detailed logging
+const debugConfig = useConfigDebug();
+console.log('Stream stats:', validator.getStreamStats());
 ```
 
----
+### Token Issues  
+```typescript
+// Check token state (development only)
+const tokenDebug = tokenManager.getDebugInfo();
+console.log('Token valid:', tokenDebug.isValid);
+```
 
-## Common Questions
+### Environment Issues
+```typescript  
+// Verify feature detection
+const { config } = useBackendConfig();
+console.log('Backend features:', config.backend);
+```
 
-### Q: Can I cache API responses in frontend?
+## 👥 Team Onboarding
 
-**A:** No. Use backend's semantic cache (revalidates against policy version). If you cache, you might show stale data after policy changes.
+### New Developer Checklist
+1. Read this handoff document
+2. Review **[`governance/frontend-rules.md`](docs/governance/frontend-rules.md)**
+3. Understand **[`api/streaming.md`](docs/api/streaming.md)** contract
+4. Study **[`development/frontend-dev-setup.md`](docs/development/frontend-dev-setup.md)**
+5. Practice with error handling examples
+6. Run governance linter locally
 
----
+### Code Review Guidelines
+- Verify [`ChunkType`](frontend/src/types/streaming.ts:8) enum usage
+- Check for sessionStorage not localStorage
+- Validate error handling completeness
+- Confirm feature flag usage patterns
+- Review governance rule compliance
 
-### Q: Should I validate the SQL?
+## 📞 Support & Contact
 
-**A:** No. Just display it (from `technical_view.sql`). SQLGuard already validated it server-side.
+### Development Issues
+- **Streaming Validation:** Check **[`StreamValidator`](frontend/src/utils/streamingValidator.ts:25)** implementation
+- **Token Management:** Review **[`TokenManager`](frontend/src/api/tokenManager.ts:33)** thread safety
+- **Error Handling:** Consult **[`api/errors.md`](docs/api/errors.md)** for all codes
 
----
-
-### Q: What if the user doesn't have permission?
-
-**A:** Backend returns HTTP 403. You show "Access Denied" and suggest why (from `error_code`).
-
----
-
-### Q: Can I infer what tables are in scope?
-
-**A:** No. Request them from backend. Frontend doesn't know the active policy.
-
----
-
-### Q: What if chunks arrive out of order?
-
-**A:** Log error and fail the stream. That's a contract violation. Report to architecture team.
-
----
-
-### Q: Can I skip the `technical_view` chunk?
-
-**A:** No. It provides context for the `data` chunk (assumptions). Both are mandatory.
-
----
-
-## Deployment Checklist
-
-Before pushing to production:
-
-- [ ] All endpoints tested with backend
-- [ ] Streaming chunks validated for order
-- [ ] Error handling tested (simulate 403, 429, 500)
-- [ ] Environment variables templated (no secrets)
-- [ ] No hardcoded API URLs (use env vars)
-- [ ] No console errors in production build
-- [ ] Governance rules verified (no SQL logic, no auth checks)
-- [ ] CORS configured on backend
-- [ ] Accessibility tested (axe DevTools)
-- [ ] Architecture review passed (if governance-related)
+### Governance Reviews
+- **Rule Violations:** See **[`governance/frontend-rules.md`](docs/governance/frontend-rules.md)**
+- **Override Requests:** Follow documented approval process
+- **CI Failures:** Check PR checklist compliance
 
 ---
 
-## Getting Help
-
-**If backend isn't working:**
-→ Check backend logs: `python main.py` console output
-
-**If endpoints don't match docs:**
-→ Check `openapi/fortress.yaml` (is authoritative over this doc)
-
-**If NDJSON chunks wrong:**
-→ Check `docs/api/streaming.md` for exact schema
-
-**If permission denied:**
-→ Check `docs/api/errors.md` for `FORBIDDEN` / `UNAUTHORIZED` handling
-
-**If governance rule unclear:**
-→ Check `docs/governance/frontend-rules.md` for examples
-
----
-
-## Summary
-
-You now have:
-
-✅ **API Contract** — Every endpoint, every field  
-✅ **Streaming Protocol** — Chunk order, schema, error handling  
-✅ **Environment Behavior** — What works where  
-✅ **Error Handling** — All error codes + recovery  
-✅ **Governance Rules** — What NOT to do  
-✅ **Local Setup** — Step-by-step guide  
-
-**Frontend development can begin immediately.**
-
-**No backend assumptions needed. All contracts are written.**
-
----
-
-## Next Steps (Frontend Team)
-
-1. **Read** `docs/governance/frontend-rules.md` (10 rules)
-2. **Setup** local dev per `docs/development/frontend-dev-setup.md`
-3. **Test** first endpoint (`/auth/me`) per `docs/api/endpoints.md`
-4. **Validate** streaming per `docs/api/streaming.md`
-5. **Build** components that consume data (display only)
-6. **Submit** PR with governance review tag
-7. **Deploy** once all checks pass
-
----
-
-**Backend is ready. Frontend has everything it needs.**
-
-**Questions?** Check the relevant document. If it's not there, it's a backend contract gap — escalate to architecture.
-
+**Next Steps:** Proceed to individual documentation files for detailed implementation guidance. Each file is standalone and GitHub-rendering optimized.

@@ -5,15 +5,17 @@ type PanelProps = {
   description?: string;
   children: React.ReactNode;
   isRtl?: boolean;
+  testId?: string;
 };
 
-export function Panel({ title, description, children, isRtl = false }: PanelProps) {
+export function Panel({ title, description, children, isRtl = false, testId }: PanelProps) {
   return (
     <section
       className={`bg-white border border-gray-200 rounded-lg shadow-sm p-4 space-y-2 ${
         isRtl ? 'rtl' : 'ltr'
       }`}
       dir={isRtl ? 'rtl' : 'ltr'}
+      data-testid={testId}
     >
       <div>
         <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
