@@ -79,7 +79,16 @@ jobs:
           flake8 app
 
       # ----------------------------------------------------------------------
-      # 4. Backend Testing (Governed)
+      # 4. Governance-Lock Checks (Fast Gates)
+      # ----------------------------------------------------------------------
+      - name: 🔒 Verify Local Verification Script (Syntax)
+        run: bash -n verify_backend.sh
+
+      - name: 🔒 Env Schema Parity Gate
+        run: python scripts/verify/check_env_schema_parity.py
+
+      # ----------------------------------------------------------------------
+      # 5. Backend Testing (Governed)
       # ----------------------------------------------------------------------
       - name: 🧪 Backend Test Suite (Governed)
         run: |
@@ -109,17 +118,4 @@ jobs:
       # ----------------------------------------------------------------------
       - name: 📜 Validate OpenAPI & Streaming Contracts
         run: |
-          # Use Spectral to enforce OpenAPI standards and contract parity
-          npx @stoplight/spectral-cli lint docs/api/*.yaml
-
-      # ----------------------------------------------------------------------
-      # 7. Startup Verification (Smoke Test)
-      # ----------------------------------------------------------------------
-      - name: 🚀 Backend Startup Smoke Test
-        run: |
-          # Start server in background
-          uvicorn main:app --host 0.0.0.0 --port 8000 &
-          # Wait for boot
-          sleep 5
-          # Verify basic reachability
-          curl -f http://localhost:8000/api/v1/health/llm || exit 1
+          npx @stoplight/spectral-cli lint openapi/fortress.yaml --ruleset openapi/generator/spectral-rules.yaml

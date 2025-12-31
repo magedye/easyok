@@ -1,83 +1,201 @@
-# EasyData Backend
+# 🛡️ EasyData Backend — Fortress-Governed AI Data System
 
-FastAPI backend for natural-language-to-SQL on Oracle/MSSQL with LLM (Groq/OpenAI/etc.) and Chroma/Qdrant vector stores. Follows the canonical architecture in `docs/guidelines.md`, `docs/project_design_document.md`, and API contract `master_api_contract.md`.
+**EasyData Backend** is a governance-first, security-hardened backend for natural-language data analysis. It follows a Fortress Architecture: deterministic at startup, audit-ready at runtime, and intolerant to silent drift. This repository represents the final, locked backend state after full governance enforcement.
 
-## Prerequisites
-- Python 3.11
-- Local venv at `./.venv` (PEP 668 compliant)
-- Oracle client (thin driver via `oracledb`) if using Oracle
-- Access keys for the selected LLM provider
-- No system-wide `pip install` (use the venv only)
+---
 
-## Setup
+## 🚀 Purpose
+- Natural Language → SQL analysis
+- Strict schema access governance
+- NDJSON streaming responses (contract-driven)
+- Training and learning under explicit approval
+- Full auditability and traceability
+- Frontend-agnostic, contract-first APIs
+- The system refuses to start if governance requirements are violated.
+
+---
+
+## 🧱 Core Principles
+### Governance First
+- No implicit behavior
+- No silent bypasses
+- No environment ambiguity
+- No training without policy + audit
+
+### Fail Fast
+- Startup crashes on misconfiguration
+- Hard errors on contract violations
+- Explicit skips only (never silent)
+
+### Contract Sovereignty
+- `.env.schema` is SSOT
+- OpenAPI & NDJSON contracts are binding
+- Frontend behavior is dictated by backend reality
+
+---
+
+## 🏗️ Architecture Overview
+- **Framework:** FastAPI
+- **Runtime:** Python 3.11
+- **Streaming:** NDJSON (ordered chunks)
+- **DB Providers:** Oracle / MSSQL (exclusive)
+- **Vector Stores:** ChromaDB / Qdrant
+- **LLM Providers:** OpenAI / Groq / others (pluggable)
+- **Observability:** OpenTelemetry (disabled in local by default)
+- **Testing:** Pytest + Playwright (integration)
+
+---
+
+## 🔐 Governance Model
+### Schema Access Policy (Core Primitive)
+- Active SchemaAccessPolicy governs allowed/denied tables/columns.
+- Lifecycle: draft → active → revoked.
+- No active policy = no training, no SQL, no metadata access.
+
+### Training Readiness Guard
+- Requires `ENABLE_AUDIT_LOGGING=true`, active SchemaAccessPolicy, and `TRAINING_READINESS_ENFORCED=true`.
+- Local dev may disable readiness explicitly (never implicitly).
+
+---
+
+## 🧬 Startup Sequence (Sacred Order)
+1. Load settings (`settings.py`)
+2. Enforce environment boundaries
+3. Bootstrap local schema policy (ENV=local only)
+4. Assert training readiness
+5. Create and run the application
+
+Any reordering is a governance violation.
+
+---
+
+## 🌍 Environment Model
+- Supported: `local`, `ci`, `production`
+- `.env.schema` is the Single Source of Truth
+- `.env` / `.env.local` / `.env.production` derived from schema
+- `sync_env.py` enforces schema alignment
+- Using an undefined variable is forbidden.
+
+Local defaults (recommended):
+- `ENV=local`, `ADMIN_LOCAL_BYPASS=true`
+- `ENABLE_AUDIT_LOGGING=true`
+- `TRAINING_READINESS_ENFORCED=false`
+- `ENABLE_TELEMETRY=false`, `ENABLE_OTEL=false`, `ANON_TELEMETRY=false`
+
+---
+
+## 🔌 API & Streaming
+### API
+- Fully documented via OpenAPI
+- No duplicate `operationId`
+- No undocumented responses
+
+### Streaming (NDJSON)
+Ordered chunks:
+1. `thinking`
+2. `technical_view`
+3. `data`
+4. `business_view`
+5. `error` (if applicable)
+6. `end`
+
+Rules: strict order, shared `trace_id`, nothing after `end`.
+
+---
+
+## 🧪 Testing & Verification
+### Test Suite
+```bash
+pytest -q -rs
+```
+Accepted: 0 failures; explicit, environment-driven skips only.
+
+### Verification Script (local runtime)
+```bash
+./verify_backend.sh
+```
+Reads `.env`, skips auth when `AUTH_ENABLED=false`, always emits a report.
+
+### Integration/Optional Gates
+- `scripts/verification_v3_operational.sh` (runtime DB/LLM)
+- `scripts/verification_v4_resilience.sh` (load/failure injection)
+- E2E: `npm run test:ci` (Playwright)
+
+Common gates for legacy/integration:
+```bash
+export RUN_INTEGRATION_TESTS=true
+export RUN_ORACLE_TESTS=true
+export RUN_TELEMETRY_TESTS=true
+```
+
+---
+
+## 🧰 Local Development
+Requirements: Python 3.11, virtualenv, `jq`, `curl` (DB reachable for live tests).
+
+Setup:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install -r requirements-rag.txt
+pip install -r requirements-nlp.txt
+python sync_env.py
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## Configuration
-Edit `.env` (single source of truth). Minimum for Oracle + Groq + Chroma:
-```
-DB_PROVIDER=oracle
-ORACLE_CONNECTION_STRING=oracle+oracledb://USER:PASSWORD@HOST:PORT/SERVICE
-LLM_PROVIDER=groq
-GROQ_API_KEY=your_groq_key
-VECTOR_DB=chromadb
-VECTOR_STORE_PATH=./data/vectorstore
-AUTH_ENABLED=false
-RBAC_ENABLED=false
-RLS_ENABLED=false
-```
-Other keys (see `app/core/config.py` and `.env` template):
-- `JWT_SECRET_KEY` (required when `AUTH_ENABLED=true`)
-- `OPENAI_API_KEY`, `GOOGLE_API_KEY`, etc. depending on `LLM_PROVIDER`
-- `QDRANT_URL`, `QDRANT_API_KEY` if `VECTOR_DB=qdrant`
-
-## Running the backend
-```bash
-source .venv/bin/activate
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-API base path: `/api/v1`. NDJSON streaming contract is in `AskResponse_NDJSON_Schema.md`.
-
-## Key endpoints
-- `POST /api/v1/ask` — NDJSON stream: `technical_view` → `data` → `chart` → `summary`
-- `POST /api/v1/auth/login` — demo login (admin/changeme)
-- `GET /api/v1/auth/me`
-- `POST /api/v1/admin/training/approve`
-- `GET /api/v1/health/llm`
-
-## Oracle DDL extraction/training
-```bash
-source .venv/bin/activate
-export VANNA_ALLOW_DDL=true
-python scripts/oracle/extract_and_ingest_ddl.py --owner <OWNER> --skip-venv-check --overwrite
-```
-- Writes DDL docs to Chroma collection `ddl` under `VECTOR_STORE_PATH`.
-- Use `--list-owners` to enumerate schemas; `--dry-run` to preview.
-
-## Tests
-```bash
-source .venv/bin/activate
-pytest -q
-```
-All tests currently pass; warnings for the `integration` mark and a Chromadb/Pydantic deprecation are benign.
-
-## Frontend
-Frontend sources are under `frontend/`. See `FRONTEND.md` for build/run steps if you need the UI.
-
-## Project structure (selected)
-- `main.py` — ASGI entrypoint, router wiring, middleware toggles
-- `app/api/v1/` — FastAPI routes (`ask`, `auth`, `admin`, `health`)
-- `app/services/` — business services (`orchestration_service.py`, `vanna_service.py`)
-- `app/providers/` — LLM/DB/vector providers and factory
-- `scripts/oracle/` — DDL extraction and ingestion utilities
-- `tests/` — integration/contract tests (Oracle, auth, ask streaming, health)
-- `docs/` — architecture, API contract, ADRs, requirements
-
-## Security notes
+Security notes:
 - Use read-only DB credentials.
-- Keep secrets in `.env`; do not commit them.
-- Set `AUTH_ENABLED=true` and `RBAC_ENABLED=true` for non-dev use; ensure `JWT_SECRET_KEY` is set.
+- Keep secrets out of VCS.
+- For non-dev, set `AUTH_ENABLED=true`, `RBAC_ENABLED=true`, and `JWT_SECRET_KEY`.
 
+---
+
+## 🧾 CI & Repository Hardening
+- Protected main branch; mandatory PRs; no force-push.
+- CODEOWNERS on sensitive paths: `app/core/**`, `app/utils/sql_guard.py`, `main.py`, `.env.schema`, `openapi/**`, `.github/workflows/**`, `scripts/verify/**`, `tests/**`.
+- Blocking CI gates:
+  - `bash -n verify_backend.sh`
+  - `python scripts/verify/check_env_schema_parity.py`
+  - `pytest -q -rs`
+  - `flake8 app` (arch lints)
+  - Spectral on `openapi/fortress.yaml` with `openapi/generator/spectral-rules.yaml`
+- Nightly/optional: backend smoke + Playwright E2E (no guard weakening).
+
+---
+
+## 📚 Documentation Entry Points
+- `/docs/FRONTEND_HANDOFF.md`
+- `/docs/api/endpoints.md`
+- `/docs/api/streaming.md`
+- `/docs/api/errors.md`
+- `/docs/governance/frontend-rules.md`
+- `/docs/environment/frontend-behavior.md`
+
+---
+
+## 🚫 What This Backend Will NOT Do
+- Guess permissions
+- Infer schema
+- Auto-train
+- Accept malformed environments
+- Run with missing governance
+- Hide errors
+
+---
+
+## ✅ Final Status
+- Governance: LOCKED
+- Architecture: STABLE
+- Tests: PASS (documented skips only)
+- Contracts: ENFORCED
+- Frontend-Ready: YES
+
+---
+
+## 📌 License & Usage
+Intended for controlled, auditable environments. Any change must respect the Governance Lock Protocol.
+
+---
+
+**EasyData Backend** — *A system that crashes on contradiction — by design.*

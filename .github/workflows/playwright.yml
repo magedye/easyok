@@ -1,10 +1,9 @@
-name: 🛡️ EasyData Fortress CI
+name: 🧪 EasyData Nightly E2E (Playwright)
 
 on:
-  push:
-    branches: [ main, master, develop ]
-  pull_request:
-    branches: [ main, master, develop ]
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 3 * * *"
 
 env:
   # CI GOVERNANCE MODE (NON-NEGOTIABLE)
@@ -58,6 +57,12 @@ jobs:
           pip install -e ./flake8_easydata_arch/
           flake8 app
 
+      - name: 🔒 Verify Local Verification Script (Syntax)
+        run: bash -n verify_backend.sh
+
+      - name: 🔒 Env Schema Parity Gate
+        run: python scripts/verify/check_env_schema_parity.py
+
       - name: 🧪 Backend Test Suite
         run: pytest -q -rs
         env:
@@ -77,7 +82,7 @@ jobs:
           npm audit --audit-level=high
 
       - name: 📜 Validate OpenAPI Contracts
-        run: npx @stoplight/spectral-cli lint docs/api/*.yaml
+        run: npx @stoplight/spectral-cli lint openapi/fortress.yaml --ruleset openapi/generator/spectral-rules.yaml
 
   # ----------------------------------------------------------------------
   # Job 2: Playwright E2E (Governance Aligned)

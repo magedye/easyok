@@ -1,0 +1,14 @@
+# EasyData Fortress — Governance-Locked Paths
+# NOTE: Replace @mfadmin with the correct GitHub user/team for your org.
+
+/app/core/ @mfadmin
+/app/utils/sql_guard.py @mfadmin
+/main.py @mfadmin
+
+/.env.schema @mfadmin
+/openapi/ @mfadmin
+
+/.github/workflows/ @mfadmin
+/scripts/verify/ @mfadmin
+/tests/ @mfadmin
+
