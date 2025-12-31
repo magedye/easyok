@@ -1,0 +1,45 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - text: EasyData
+      - link "الاستعلام" [ref=e6] [cursor=pointer]:
+        - /url: /
+      - link "التدريب" [ref=e7] [cursor=pointer]:
+        - /url: /training
+      - link "العمليات" [ref=e8] [cursor=pointer]:
+        - /url: /console
+      - link "المراقبة" [ref=e9] [cursor=pointer]:
+        - /url: /admin
+  - generic [ref=e11]:
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - heading "لوحة الاستعلام المحكّمة" [level=2] [ref=e14]
+        - paragraph [ref=e15]: أرسل سؤالاً وشاهد المسار المحكوم (عرض تقني، بيانات، رسم، ملخص) دون أي منطق في الواجهة.
+      - generic [ref=e17]:
+        - text: السؤال
+        - textbox "Question" [ref=e18]:
+          - /placeholder: اكتب السؤال بالعربية أو الإنجليزية
+          - text: اختبار الاتجاه
+        - button "Ask" [ref=e20] [cursor=pointer]: اسأل
+        - generic [ref=e21]: اختبار الاتجاه
+    - alert [ref=e22]:
+      - generic [ref=e23]:
+        - img [ref=e25]
+        - generic [ref=e27]:
+          - heading "Failed to fetch" [level=3] [ref=e28]
+          - paragraph [ref=e29]: تحقق من اتصال الإنترنت وحاول مرة أخرى
+          - generic [ref=e31]:
+            - strong [ref=e32]: "الوقت:"
+            - text: 7:44:40 AM
+        - button "إخفاء الخطأ" [ref=e33]:
+          - img
+      - button "المحاولة مرة أخرى" [ref=e36]:
+        - img [ref=e37]
+        - text: المحاولة مرة أخرى
+      - button "نسخ تفاصيل الخطأ" [ref=e40]:
+        - img [ref=e41]
+        - text: نسخ تفاصيل الخطأ
+```

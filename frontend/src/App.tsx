@@ -14,9 +14,12 @@ import { AUTH_ENABLED, TOKEN_STORAGE_KEY } from './config';
 
 // App component defines application routes and top-level navigation.
 export default function App() {
-  const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+  const token = sessionStorage.getItem(TOKEN_STORAGE_KEY);
   const isAuthed = !AUTH_ENABLED || Boolean(token);
-  const role: 'admin' | 'viewer' = 'admin'; // role should be resolved from server in real flow
+  const role: 'admin' | 'viewer' =
+    (window as any).__USER?.role === 'admin'
+      ? 'admin'
+      : 'viewer';
 
   return (
     <ErrorBoundary>

@@ -24,7 +24,7 @@ export default function Login() {
       return;
     }
 
-    localStorage.setItem(TOKEN_STORAGE_KEY, tokenInput.trim());
+    sessionStorage.setItem(TOKEN_STORAGE_KEY, tokenInput.trim());
     setError(null);
     navigate('/');
   };

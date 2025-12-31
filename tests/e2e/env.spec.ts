@@ -14,6 +14,15 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Environment Detection', () => {
   test.beforeEach(async ({ page }) => {
+    await page.route('**/api/v1/ask', async (route) => {
+      const traceId = 'env-trace';
+      const stream = `{"type":"thinking","trace_id":"${traceId}","timestamp":"2025-01-01T00:00:00Z","payload":{"content":"env"}}\n{"type":"end","trace_id":"${traceId}","timestamp":"2025-01-01T00:00:01Z","payload":{"message":"done"}}`;
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/x-ndjson' },
+        body: stream
+      });
+    });
     await page.goto('/');
   });
 
@@ -159,8 +168,8 @@ test.describe('Environment Detection', () => {
     });
 
     // Trigger an API call
-    await page.locator('input[name="question"]').fill('test api config');
-    await page.locator('button:has-text("Ask")').click();
+    await page.locator('[data-testid="question-input"]').fill('test api config');
+    await page.locator('[data-testid="ask-button"]').click();
 
     // Wait to ensure API call was made and validated
     await page.waitForTimeout(2000);

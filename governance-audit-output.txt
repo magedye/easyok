@@ -1,0 +1,34 @@
+
+Running 9 tests using 1 worker
+
+  ✓  1 [chromium] › tests/e2e/governance-audit.spec.ts:23:7 › Governance Compliance Audit › RULE #1: No SQL parsing/generation in frontend (127ms)
+Caching/RLS violations found: [
+  {
+    file: [32m'api/generated/client.ts'[39m,
+    pattern: [32m'/row.*level.*security|rls/i'[39m,
+    match: [32m'RLS'[39m,
+    line: [33m309[39m
+  },
+  {
+    file: [32m'utils/governanceValidator.ts'[39m,
+    pattern: [32m'/row.*level.*security|rls/i'[39m,
+    match: [32m'RLS'[39m,
+    line: [33m55[39m
+  },
+  {
+    file: [32m'utils/governanceValidator.ts'[39m,
+    pattern: [32m'/check.*permission|authorize.*row|filter.*user/i'[39m,
+    match: [32m'checkPermission'[39m,
+    line: [33m84[39m
+  },
+  {
+    file: [32m'utils/governanceValidator.ts'[39m,
+    pattern: [32m'/canAccess|hasPermission.*row|rowFilter/i'[39m,
+    match: [32m'canAccess'[39m,
+    line: [33m84[39m
+  }
+]
+  ✘  2 [chromium] › tests/e2e/governance-audit.spec.ts:73:7 › Governance Compliance Audit › RULE #2: No caching or RLS logic in frontend (124ms)
+  ✓  3 [chromium] › tests/e2e/governance-audit.spec.ts:113:7 › Governance Compliance Audit › RULE #3: No localStorage for tokens (143ms)
+  ✘  4 [chromium] › tests/e2e/governance-audit.spec.ts:151:7 › Governance Compliance Audit › RULE #4: All mutations go through API only (404ms)
+  ✘  5 [chromium] › tests/e2e/governance-audit.spec.ts:196:7 › Governance Compliance Audit › RULE #5: TokenManager uses sessionStorage with refresh strategy (289ms)

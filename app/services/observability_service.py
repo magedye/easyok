@@ -4,6 +4,8 @@ import time
 from statistics import mean
 from typing import Dict, Any, List
 
+from sqlalchemy import text
+
 try:
     import psutil  # type: ignore
 except ImportError:  # pragma: no cover
@@ -21,7 +23,7 @@ class ObservabilityService:
         db_status = "ok"
         try:
             with session_scope() as session:
-                session.execute("SELECT 1")
+                session.execute(text("SELECT 1"))
         except Exception as exc:  # pragma: no cover
             db_status = f"error: {exc}"
 

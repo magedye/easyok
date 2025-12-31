@@ -13,6 +13,7 @@
  * - Promise sharing for multiple simultaneous token requests
  * - Queue management for pending requests during refresh
  */
+import { TOKEN_STORAGE_KEY } from '../config';
 
 interface TokenPayload {
   exp: number;
@@ -34,7 +35,7 @@ export class TokenManager {
   private token: string | null = null;
   private refreshPromise: Promise<string> | null = null;
   private refreshLock = false;
-  private readonly storageKey = 'session_token';
+  private readonly storageKey = TOKEN_STORAGE_KEY;
   private readonly apiBaseUrl: string;
   
   // Refresh 5 minutes before expiry (300 seconds)

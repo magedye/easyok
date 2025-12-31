@@ -17,12 +17,27 @@ class OpenAICompatibleProvider(BaseLLMProvider):
     def __post_init__(self) -> None:
         if not self.settings.OPENAI_API_KEY:
             raise AppException("OpenAI-compatible API key is not configured")
+
         openai.api_key = self.settings.OPENAI_API_KEY
+
         if getattr(self.settings, "OPENAI_BASE_URL", None):
             openai.api_base = self.settings.OPENAI_BASE_URL
+
         self.model = self.settings.OPENAI_MODEL
 
-    def generate_sql(self, prompt: str, temperature: float, max_tokens: int) -> str:
+    def generate_sql(
+        self,
+        prompt: str,
+        temperature: float = 0.0,
+        max_tokens: int = 512,
+    ) -> str:
+        """
+        Generate SQL from prompt.
+
+        GOVERNANCE:
+        Default parameters are enforced here to prevent contract violations
+        across services, streaming paths, and background jobs.
+        """
         try:
             response = openai.ChatCompletion.create(
                 model=self.model,
@@ -31,10 +46,16 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 max_tokens=max_tokens,
             )
             return response["choices"][0]["message"]["content"].strip()
+
         except Exception as exc:
             raise AppException(str(exc))
 
-    def generate_summary(self, question: str, sql: str, results: List[Dict[str, str]]) -> str:
+    def generate_summary(
+        self,
+        question: str,
+        sql: str,
+        results: List[Dict[str, str]],
+    ) -> str:
         try:
             context = str(results[:5])
             prompt = (
@@ -43,6 +64,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 f"Here are some of the results: {context}.\n"
                 "Provide a concise, plain language summary of the findings."
             )
+
             response = openai.ChatCompletion.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
@@ -50,6 +72,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 max_tokens=200,
             )
             return response["choices"][0]["message"]["content"].strip()
+
         except Exception as exc:
             raise AppException(str(exc))
 

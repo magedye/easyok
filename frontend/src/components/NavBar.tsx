@@ -7,16 +7,20 @@ import { AUTH_ENABLED, TOKEN_STORAGE_KEY } from '../config';
 export default function NavBar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+  const token = sessionStorage.getItem(TOKEN_STORAGE_KEY);
   const isAuthed = !AUTH_ENABLED || Boolean(token);
 
   const handleLogout = () => {
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(TOKEN_STORAGE_KEY);
     navigate(AUTH_ENABLED ? '/login' : '/');
   };
 
   return (
-    <nav className="navbar px-4 py-2 flex items-center justify-between" dir="rtl">
+    <nav
+      className="navbar px-4 py-2 flex items-center justify-between"
+      dir="rtl"
+      data-testid="auth-header"
+    >
       <div className="flex items-center space-x-4 space-x-reverse">
         <span className="title text-blue-600 text-lg font-semibold">EasyData</span>
         {isAuthed && (
@@ -48,11 +52,15 @@ export default function NavBar() {
       <div>
         {AUTH_ENABLED &&
           (token ? (
-            <button onClick={handleLogout} className="btn bg-red-500 hover:bg-red-600">
+            <button
+              onClick={handleLogout}
+              className="btn bg-red-500 hover:bg-red-600"
+              data-testid="logout-button"
+            >
               خروج
             </button>
           ) : (
-            <Link to="/login" className="btn">
+            <Link to="/login" className="btn" data-testid="login">
               دخول
             </Link>
           ))}

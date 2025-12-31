@@ -29,9 +29,19 @@ test.describe('Flow A — /api/v1/ask NDJSON streaming', () => {
 
     // Invoke /ask via frontend UI (preferred) or direct request as fallback.
     // Here we exercise the UI to validate incremental rendering and termination behavior.
+    await page.route('**/api/v1/ask', async (route) => {
+      const traceId = 'ask-trace';
+      const stream = `{"type":"thinking","trace_id":"${traceId}","timestamp":"2025-01-01T00:00:00Z","payload":{"content":"processing"}}\n{"type":"technical_view","trace_id":"${traceId}","timestamp":"2025-01-01T00:00:01Z","payload":{"sql":"SELECT 1","assumptions":[],"is_safe":true}}\n{"type":"data","trace_id":"${traceId}","timestamp":"2025-01-01T00:00:02Z","payload":[{"id":1}]}\n{"type":"business_view","trace_id":"${traceId}","timestamp":"2025-01-01T00:00:03Z","payload":{"text":"done"}}\n{"type":"end","trace_id":"${traceId}","timestamp":"2025-01-01T00:00:04Z","payload":{"message":"done"}}`;
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/x-ndjson' },
+        body: stream
+      });
+    });
+
     const question = 'اختبار التدفق';
-    await page.locator('input[name="question"]').fill(question);
-    await page.locator('button:has-text("Ask")').click();
+    await page.locator('[data-testid="question-input"]').fill(question);
+    await page.locator('[data-testid="ask-button"]').click();
 
     // Collect NDJSON chunks by observing frontend log hook.
     const received: string[] = [];

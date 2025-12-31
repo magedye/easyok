@@ -1,0 +1,193 @@
+{
+  "metadata": {
+    "timestamp": "2025-12-31T04:30:00Z",
+    "testFile": "tests/e2e/governance-audit.spec.ts",
+    "browser": "chromium",
+    "environment": "E2E (live backend + frontend)",
+    "baseUrl": "http://localhost:5173",
+    "backend": "http://localhost:8000",
+    "totalDuration": 72400,
+    "workers": 1
+  },
+  "summary": {
+    "total": 9,
+    "passed": 4,
+    "failed": 5,
+    "skipped": 0,
+    "passRate": 44.4
+  },
+  "rules": [
+    {
+      "ruleId": 1,
+      "title": "No SQL parsing/generation in frontend",
+      "status": "PASS",
+      "duration": 127,
+      "type": "code-scan",
+      "violations": 0,
+      "details": "Scanned all frontend source files for SQL patterns - no violations found"
+    },
+    {
+      "ruleId": 2,
+      "title": "No caching or RLS logic in frontend",
+      "status": "FAIL",
+      "duration": 135,
+      "type": "code-scan",
+      "violations": 4,
+      "severity": "medium",
+      "details": "Found RLS and permission-related references in governance validation utils (likely false positives)",
+      "violationDetails": [
+        {
+          "file": "api/generated/client.ts",
+          "line": 309,
+          "pattern": "RLS",
+          "match": "RLS",
+          "context": "Generated API client code"
+        },
+        {
+          "file": "utils/governanceValidator.ts",
+          "line": 55,
+          "pattern": "RLS",
+          "match": "RLS",
+          "context": "Validation documentation"
+        },
+        {
+          "file": "utils/governanceValidator.ts",
+          "line": 84,
+          "pattern": "checkPermission|canAccess",
+          "matches": ["checkPermission", "canAccess"],
+          "context": "Validation documentation"
+        }
+      ]
+    },
+    {
+      "ruleId": 3,
+      "title": "No localStorage for tokens",
+      "status": "PASS",
+      "duration": 206,
+      "type": "code-scan",
+      "violations": 0,
+      "details": "No localStorage usage with tokens detected"
+    },
+    {
+      "ruleId": 4,
+      "title": "All mutations go through API only",
+      "status": "FAIL",
+      "duration": 340,
+      "type": "runtime",
+      "error": "Test assertion failure - API call tracking incomplete",
+      "details": "Test expected all mutations to use /api/ endpoints but assertion failed during runtime validation"
+    },
+    {
+      "ruleId": 5,
+      "title": "TokenManager uses sessionStorage with refresh strategy",
+      "status": "PASS",
+      "duration": 402,
+      "type": "runtime",
+      "violations": 0,
+      "details": "Runtime inspection confirmed TokenManager properly uses sessionStorage"
+    },
+    {
+      "ruleId": 6,
+      "title": "Environment detection is runtime-based",
+      "status": "FAIL",
+      "duration": 428,
+      "type": "runtime",
+      "error": "Runtime environment config incomplete",
+      "details": "window.__ENV not properly initialized at runtime - environment detection needs initialization fix"
+    },
+    {
+      "ruleId": 7,
+      "title": "Streaming chunks strictly validated via StreamValidator",
+      "status": "PASS",
+      "duration": 212,
+      "type": "integration",
+      "violations": 0,
+      "integrationPoints": [
+        "api/easyStream.ts",
+        "components/Chat.tsx",
+        "utils/governanceValidator.ts",
+        "utils/streamingValidator.test.ts",
+        "utils/streamingValidator.ts"
+      ],
+      "details": "StreamValidator properly integrated in 5 locations with comprehensive validation"
+    },
+    {
+      "ruleId": 8,
+      "title": "No unauthorized data exposure in browser",
+      "status": "FAIL",
+      "duration": 400,
+      "type": "runtime",
+      "severity": "high",
+      "error": "Sensitive globals detected in browser context",
+      "details": "Runtime inspection found sensitive window globals - possible debug/test artifacts"
+    },
+    {
+      "ruleId": 9,
+      "title": "Error handling follows governance contract",
+      "status": "FAIL",
+      "duration": 430,
+      "type": "runtime",
+      "error": "Test timeout - UI selectors not found",
+      "details": "Test unable to locate error trigger UI elements - selectors may need updating for current UI"
+    }
+  ],
+  "issues": [
+    {
+      "severity": "high",
+      "ruleId": 8,
+      "title": "Browser globals exposure",
+      "description": "Sensitive window globals detected in browser context",
+      "impact": "Potential security/governance violation",
+      "remediation": "Investigate and remove debug globals before production"
+    },
+    {
+      "severity": "medium",
+      "ruleId": 2,
+      "title": "False positive RLS references",
+      "description": "RLS references found in validation/documentation code",
+      "impact": "Governance audit failure (non-critical)",
+      "remediation": "Code review to confirm documentation-only usage"
+    },
+    {
+      "severity": "medium",
+      "ruleId": "4,6,9",
+      "title": "Test infrastructure issues",
+      "description": "Multiple runtime tests failing due to assertion or selector issues",
+      "impact": "Inaccurate governance validation results",
+      "remediation": "Update test expectations and UI selectors to match current implementation"
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "critical",
+      "title": "Fix browser globals (RULE #8)",
+      "description": "Investigate and remove sensitive globals detected at runtime",
+      "effort": "2-4 hours"
+    },
+    {
+      "priority": "high",
+      "title": "Review RULE #2 false positives",
+      "description": "Code review to confirm RLS references are documentation-only",
+      "effort": "1-2 hours"
+    },
+    {
+      "priority": "high",
+      "title": "Update test selectors",
+      "description": "Fix test assertions in RULES #4, #6, #9 to match current UI",
+      "effort": "2-3 hours"
+    },
+    {
+      "priority": "medium",
+      "title": "Implement environment initialization",
+      "description": "Ensure window.__ENV is properly initialized for RULE #6",
+      "effort": "1-2 hours"
+    }
+  ],
+  "executionContext": {
+    "startTime": "2025-12-31T04:22:00Z",
+    "endTime": "2025-12-31T04:34:00Z",
+    "backendStatus": "running",
+    "frontendStatus": "running",
+    "testMode": "live-e2e"
+  }
+}

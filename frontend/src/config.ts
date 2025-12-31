@@ -8,7 +8,7 @@ export const SIGNOZ_DASHBOARD_URL: string =
   import.meta.env.VITE_SIGNOZ_DASHBOARD_URL || '';
 
 // Storage keys for tokens or other items
-export const TOKEN_STORAGE_KEY = 'token';
+export const TOKEN_STORAGE_KEY = 'session_token';
 
 // Frontend authentication toggle.
 // - Default: disabled (MVP)

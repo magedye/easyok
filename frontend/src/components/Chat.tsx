@@ -6,11 +6,13 @@ import { ChunkType, StreamChunk } from '../types/streaming';
 import { StreamValidator } from '../utils/streamingValidator';
 import { useFeatureFlag } from '../hooks/useFeatureFlag';
 import { useRunHistory } from '../hooks/useRunHistory';
+import { ErrorResponse } from '../api/errorHandler';
 
 // import AssumptionsPanel from './AssumptionsPanel'; // Commented out due to module issues
 import DataTable from './DataTable';
 import ChartView from './ChartView';
 import SummaryView from './SummaryView';
+import ErrorDisplay from './ErrorDisplay';
 import { Panel } from './UiPrimitives';
 
 interface DataRow {
@@ -22,11 +24,8 @@ interface ChartConfig {
   config: Record<string, any>;
 }
 
-interface StreamError {
-  message: string;
-  trace_id?: string;
-  error_code?: string;
-}
+// Using ErrorResponse from errorHandler for type consistency
+type StreamError = ErrorResponse;
 
 interface StreamProgress {
   phase: ChunkType | null;
@@ -50,6 +49,7 @@ export default function Chat() {
     expectedNext: []
   });
   const [lastAskedQuestion, setLastAskedQuestion] = useState<string | null>(null);
+  const [showLoading, setShowLoading] = useState(false);
   
   const isRtl = true;
   const validatorRef = useRef<StreamValidator>(new StreamValidator());
@@ -84,6 +84,7 @@ export default function Chat() {
       expectedNext: []
     });
     setLastAskedQuestion(null);
+    setShowLoading(false);
     validatorRef.current.reset();
     currentTraceId.current = null;
   };
@@ -286,9 +287,6 @@ export default function Chat() {
         traceId: currentTraceId.current
       });
     }
-    
-    // Clear thinking state as we're done
-    setThinking(null);
   };
 
   /**
@@ -307,21 +305,28 @@ export default function Chat() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const executeQuestion = async () => {
     if (!question.trim()) return;
 
     reset();
+    setLastAskedQuestion(question.trim());
+    setShowLoading(true);
 
     try {
       await start({ question: question.trim(), stream: true }, handleChunk);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorCode = (err as any)?.error_code;
+      const traceId = (err as any)?.trace_id || currentTraceId.current || undefined;
       
       setError({
         message: errorMessage || 'An error occurred',
-        trace_id: currentTraceId.current || undefined
+        trace_id: traceId,
+        error_code: errorCode
       });
+      if (traceId && !currentTraceId.current) {
+        currentTraceId.current = traceId;
+      }
       
       console.error('[Chat] Request failed:', {
         error: errorMessage,
@@ -330,6 +335,27 @@ export default function Chat() {
       });
     }
   };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await executeQuestion();
+  };
+
+  const handleRetry = async () => {
+    setError(null);
+    await executeQuestion();
+  };
+
+  useEffect(() => {
+    if (!isStreaming && showLoading) {
+      const timer = setTimeout(() => setShowLoading(false), 300);
+      return () => clearTimeout(timer);
+    }
+    return;
+  }, [isStreaming, showLoading]);
+
+  const retryDisabledCodes = ['POLICY_VIOLATION', 'DATA_ACCESS_DENIED', 'TOKEN_EXPIRED'];
+  const canRetry = error ? !retryDisabledCodes.includes(error.error_code || '') : false;
 
   /**
    * Get user-friendly phase display name
@@ -354,42 +380,56 @@ export default function Chat() {
         title="لوحة الاستعلام المحكّمة"
         description="أرسل سؤالاً وشاهد المسار المحكوم (عرض تقني، بيانات، رسم، ملخص) دون أي منطق في الواجهة."
         isRtl={isRtl}
+        testId="chat-panel"
       >
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-3" data-testid="ask-form">
           <label htmlFor="question" className="text-sm font-medium text-gray-800">
             السؤال
           </label>
           <textarea
             id="question"
+            name="question"
+            data-testid="question-input"
+            aria-label="Question"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             rows={3}
             className="w-full border rounded p-2 text-sm"
             placeholder="اكتب السؤال بالعربية أو الإنجليزية"
+            disabled={isStreaming || showLoading}
           />
           
           <div className="flex justify-between items-center">
-            <button type="submit" className="btn" disabled={isStreaming}>
+            <button
+              type="submit"
+              className="btn"
+              disabled={isStreaming || showLoading}
+              data-testid="ask-button"
+              aria-label="Ask"
+            >
               {isStreaming ? 'جاري المعالجة...' : 'اسأل'}
             </button>
             
             {enableAdvancedLogging && currentTraceId.current && (
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-gray-500" data-testid="trace-id">
                 Trace: {currentTraceId.current.substring(0, 8)}...
               </span>
             )}
           </div>
 
           {/* Enhanced streaming progress indicator */}
-          {isStreaming && (
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+          {(isStreaming || showLoading) && (
+            <div
+              className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded"
+              data-testid="loading"
+            >
               <div className="flex justify-between text-sm">
                 <span>المرحلة الحالية: {getPhaseDisplayName(progress.phase)}</span>
                 <span>الأجزاء المستلمة: {progress.chunksReceived}</span>
               </div>
               
               {progress.expectedNext.length > 0 && enableAdvancedLogging && (
-                <div className="text-xs text-gray-600 mt-1">
+                <div className="text-xs text-gray-600 mt-1" data-testid="expected-next">
                   التالي المتوقع: {progress.expectedNext.map(getPhaseDisplayName).join(', ')}
                 </div>
               )}
@@ -408,14 +448,33 @@ export default function Chat() {
               ℹ️ التخزين المؤقت الدلالي مُفعّل - قد تكون النتائج محفوظة
             </div>
           )}
+
+          {lastAskedQuestion && (
+            <div
+              className="text-sm text-gray-700 mt-2"
+              data-testid="question-display"
+            >
+              {lastAskedQuestion}
+            </div>
+          )}
         </form>
       </Panel>
+
+      {thinking && (
+        <div
+          className="p-3 bg-gray-50 border border-gray-200 rounded text-sm"
+          data-testid="thinking-display"
+        >
+          {thinking}
+        </div>
+      )}
 
       {technicalView && (
         <Panel
           title="العرض التقني (من الخادم)"
           description="SQL والافتراضات مشتقة من الـ DDL، فقط للعرض."
           isRtl={isRtl}
+          testId="technical-view"
         >
           <pre className="bg-blue-50 border border-blue-200 rounded p-3 text-xs overflow-auto">
             {technicalView.sql}
@@ -455,22 +514,43 @@ export default function Chat() {
       )}
 
       {error && (
-        <div className="bg-red-100 text-red-700 p-2 rounded" dir="rtl">
-          خطأ: {error.message}
-        </div>
+        <ErrorDisplay
+          error={error}
+          traceId={currentTraceId.current || undefined}
+          onRetry={canRetry ? handleRetry : undefined}
+          onDismiss={() => setError(null)}
+          canRetry={canRetry}
+          isRtl={isRtl}
+          data-testid="error-display"
+        />
       )}
       {dataRows && (
-        <Panel title="البيانات" description="البيانات كما أرسلها الخادم." isRtl={isRtl}>
+        <Panel
+          title="البيانات"
+          description="البيانات كما أرسلها الخادم."
+          isRtl={isRtl}
+          testId="data-view"
+        >
           <DataTable rows={dataRows} />
         </Panel>
       )}
       {chartConfig && (
-        <Panel title="الرسم البياني" description="تكوين الرسم من الخادم." isRtl={isRtl}>
+        <Panel
+          title="الرسم البياني"
+          description="تكوين الرسم من الخادم."
+          isRtl={isRtl}
+          testId="chart-view"
+        >
           <ChartView type={chartConfig.type} config={chartConfig.config} rows={dataRows || []} />
         </Panel>
       )}
       {summary && (
-        <Panel title="الملخص" description="ملخص عربي من الخادم." isRtl={isRtl}>
+        <Panel
+          title="الملخص"
+          description="ملخص عربي من الخادم."
+          isRtl={isRtl}
+          testId="summary-view"
+        >
           <SummaryView text={typeof summary === 'string' ? summary : (summary as any).text} />
         </Panel>
       )}

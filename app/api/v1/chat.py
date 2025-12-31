@@ -14,7 +14,6 @@ from app.services.schema_policy_service import SchemaPolicyService
 
 router = APIRouter(tags=["chat"])
 settings = get_settings()
-vanna = VannaService()
 sql_guard = SQLGuard(settings)
 audit_service = AuditService()
 policy_service = SchemaPolicyService()
@@ -101,6 +100,7 @@ async def chat_stream(
         raise HTTPException(status_code=404, detail="SSE stream disabled")
 
     async def event_stream():
+        vanna = VannaService()
         audit_service.log(
             user_id=user.get("user_id", "anonymous"),
             role=user.get("role", "guest"),

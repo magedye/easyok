@@ -3,6 +3,7 @@ import { StreamValidator } from '../utils/streamingValidator';
 import { getTokenManager } from './tokenManager';
 import { getErrorHandler, ErrorHandler, ErrorCode } from './errorHandler';
 import { getApiBaseUrl as getConfigApiBaseUrl } from '../utils/environmentDetection';
+import { AUTH_ENABLED, TOKEN_STORAGE_KEY } from '../config';
 import type { AskChunk, AskQuestionPayload } from '../types/api';
 
 /**
@@ -48,13 +49,11 @@ interface StreamingResult {
 }
 
 function getApiBaseUrl(): string {
-  // Simplified approach - use build-time config directly
-  // Environment detection will be handled by the environment detection utility
-  const baseUrl = import.meta.env.VITE_API_BASE_URL;
-  if (!baseUrl) {
-    throw new Error('VITE_API_BASE_URL is not set');
-  }
-  return String(baseUrl).replace(/\/$/, '');
+  const runtimeBase =
+    (typeof window !== 'undefined' ? (window as any).__ENV?.API_BASE_URL : undefined) ||
+    import.meta.env.VITE_API_BASE_URL ||
+    'http://localhost:8000';
+  return String(runtimeBase).replace(/\/$/, '');
 }
 
 /**
@@ -137,33 +136,57 @@ export class StreamingClient {
     const startTime = Date.now();
     const url = `${this.baseUrl}/api/v1/ask`;
     
-    // Get valid token
-    const token = await this.tokenManager.ensureValidToken();
+    // Get valid token when auth is enabled (skip for open deployments)
+    const authEnabled =
+      typeof window !== 'undefined'
+        ? (window as any).__ENV?.AUTH_ENABLED ?? AUTH_ENABLED
+        : AUTH_ENABLED;
+
+    let token: string | null = null;
+    if (authEnabled) {
+      try {
+        token = await this.tokenManager.ensureValidToken();
+      } catch (error) {
+        console.warn('Token acquisition failed; proceeding without Authorization header', error);
+      }
+    } else {
+      try {
+        token = sessionStorage.getItem(TOKEN_STORAGE_KEY);
+      } catch {
+        token = null;
+      }
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Request-ID': requestId
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
     
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'X-Request-ID': requestId
-      },
+      headers,
       body: JSON.stringify(payload),
       signal: options.signal
     });
 
     if (!response.ok) {
-      const errorResult = await this.errorHandler.handleError(
-        await ErrorHandler.parseErrorFromResponse(response),
-        requestId
-      );
+      const parsedError = await ErrorHandler.parseErrorFromResponse(response);
+      const errorResult = await this.errorHandler.handleError(parsedError, requestId);
       
       if (errorResult.shouldRetry && errorResult.retryAfterMs) {
         // Wait for retry delay
         await new Promise(resolve => setTimeout(resolve, errorResult.retryAfterMs));
         return await this.executeStreamingRequest(payload, onChunk, options, requestId);
       }
-      
-      throw new Error(errorResult.userMessage);
+
+      const enrichedError: any = new Error(errorResult.userMessage);
+      enrichedError.error_code = parsedError.error_code;
+      enrichedError.trace_id = parsedError.trace_id || requestId;
+      throw enrichedError;
     }
 
     if (!response.body) {
@@ -173,6 +196,7 @@ export class StreamingClient {
     // Process streaming response
     const chunks: StreamChunk[] = [];
     let traceId: string | null = null;
+    let hasErrorChunk = false;
     
     try {
       for await (const chunk of this.consumeNDJSONStream(response)) {
@@ -197,7 +221,7 @@ export class StreamingClient {
         
         // Stop on error chunk
         if (chunk.type === ChunkType.ERROR) {
-          break;
+          hasErrorChunk = true;
         }
         
         // Stop on end chunk
@@ -206,18 +230,20 @@ export class StreamingClient {
         }
       }
       
-      // Validate stream completion
-      const completionValidation = this.validator.validateStreamCompletion();
-      if (!completionValidation.valid) {
-        throw new Error(`Stream incomplete: ${completionValidation.error}`);
+      // Validate stream completion when no error chunk was encountered
+      if (!hasErrorChunk) {
+        const completionValidation = this.validator.validateStreamCompletion();
+        if (!completionValidation.valid) {
+          throw new Error(`Stream incomplete: ${completionValidation.error}`);
+        }
       }
       
       const duration = Date.now() - startTime;
       this.errorHandler.clearRetryAttempts(requestId);
       
       return {
-        completed: true,
-        error: null,
+        completed: !hasErrorChunk,
+        error: hasErrorChunk ? 'Stream ended with error chunk' : null,
         chunks,
         traceId,
         duration

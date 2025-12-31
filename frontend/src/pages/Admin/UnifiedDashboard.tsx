@@ -19,13 +19,18 @@ type SentryIssue = {
   trace_id?: string;
 };
 
-export default function UnifiedDashboard() {
+type DashboardProps = {
+  role?: 'admin' | 'viewer';
+};
+
+export default function UnifiedDashboard({ role = 'viewer' }: DashboardProps) {
   const [features, setFeatures] = useState<FeatureToggle[]>([]);
   const [issues, setIssues] = useState<SentryIssue[]>([]);
   const [loading, setLoading] = useState(false);
   const [toggleTarget, setToggleTarget] = useState<FeatureToggle | null>(null);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const isAdmin = role === 'admin';
 
   const signozUrl = useMemo(() => SIGNOZ_DASHBOARD_URL.trim(), []);
 
@@ -59,12 +64,14 @@ export default function UnifiedDashboard() {
   }, []);
 
   const openModal = (feature: FeatureToggle) => {
+    if (!isAdmin) return;
     setToggleTarget(feature);
     setReason('');
     setError(null);
   };
 
   const confirmChange = async () => {
+    if (!isAdmin) return;
     if (!toggleTarget) return;
     if (!reason || reason.length < 10) {
       setError('Reason is required (min 10 chars)');
@@ -93,7 +100,7 @@ export default function UnifiedDashboard() {
   };
 
   return (
-    <div className="space-y-6" dir="rtl">
+    <div className="space-y-6" dir="rtl" data-testid="admin-dashboard">
       <h1 className="text-2xl font-semibold text-gray-900">Unified Control & Observability</h1>
       {error && <div className="bg-red-100 text-red-800 border border-red-200 p-3 rounded">{error}</div>}
 
@@ -174,10 +181,10 @@ export default function UnifiedDashboard() {
                 </div>
                 <button
                   className={`px-3 py-1 text-sm rounded ${
-                    ft.mutable ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    ft.mutable && isAdmin ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                   }`}
-                  disabled={!ft.mutable || loading}
-                  onClick={() => ft.mutable && openModal(ft)}
+                  disabled={!ft.mutable || loading || !isAdmin}
+                  onClick={() => ft.mutable && isAdmin && openModal(ft)}
                 >
                   تبديل
                 </button>
@@ -200,20 +207,22 @@ export default function UnifiedDashboard() {
               rows={3}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
+              disabled={!isAdmin || loading}
+              readOnly={!isAdmin}
               placeholder="سبب التغيير (10 أحرف على الأقل)"
             />
             <div className="flex justify-end space-x-2 space-x-reverse">
               <button
                 className="px-3 py-1 rounded border border-gray-300"
                 onClick={() => setToggleTarget(null)}
-                disabled={loading}
+                disabled={loading || !isAdmin}
               >
                 إلغاء
               </button>
               <button
                 className="px-3 py-1 rounded bg-blue-600 text-white"
                 onClick={confirmChange}
-                disabled={loading}
+                disabled={loading || !isAdmin}
               >
                 تأكيد
               </button>

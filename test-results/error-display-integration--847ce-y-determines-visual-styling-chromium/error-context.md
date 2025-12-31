@@ -1,0 +1,55 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - text: EasyData
+      - link "الاستعلام" [ref=e6] [cursor=pointer]:
+        - /url: /
+      - link "التدريب" [ref=e7] [cursor=pointer]:
+        - /url: /training
+      - link "العمليات" [ref=e8] [cursor=pointer]:
+        - /url: /console
+      - link "المراقبة" [ref=e9] [cursor=pointer]:
+        - /url: /admin
+  - generic [ref=e11]:
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - heading "لوحة الاستعلام المحكّمة" [level=2] [ref=e14]
+        - paragraph [ref=e15]: أرسل سؤالاً وشاهد المسار المحكوم (عرض تقني، بيانات، رسم، ملخص) دون أي منطق في الواجهة.
+      - generic [ref=e17]:
+        - text: السؤال
+        - textbox "Question" [ref=e18]:
+          - /placeholder: اكتب السؤال بالعربية أو الإنجليزية
+          - text: Test error severity
+        - button "Ask" [ref=e20] [cursor=pointer]: اسأل
+        - generic [ref=e21]: Test error severity
+    - generic [ref=e22]: Processing your question...
+    - alert [ref=e23]:
+      - generic [ref=e24]:
+        - img [ref=e26]
+        - generic [ref=e28]:
+          - heading "Stream ended with error chunk" [level=3] [ref=e29]
+          - paragraph [ref=e30]: تحقق من اتصال الإنترنت وحاول مرة أخرى
+          - generic [ref=e31]:
+            - generic [ref=e32]:
+              - strong [ref=e33]: "معرف التتبع:"
+              - text: 4d586fb7c190...
+            - generic [ref=e34]:
+              - strong [ref=e35]: "الوقت:"
+              - text: 7:45:13 AM
+        - button "إخفاء الخطأ" [ref=e36]:
+          - img
+      - button "المحاولة مرة أخرى" [ref=e39]:
+        - img [ref=e40]
+        - text: المحاولة مرة أخرى
+      - generic [ref=e42]:
+        - button "نسخ تفاصيل الخطأ" [ref=e43]:
+          - img [ref=e44]
+          - text: نسخ تفاصيل الخطأ
+        - link "الدعم الفني" [ref=e46] [cursor=pointer]:
+          - /url: "mailto:support@example.com?subject=Error Report&body=Trace ID: 4d586fb7c1904e74afbdbd398ff8d0fb%0AError: Stream%20ended%20with%20error%20chunk"
+          - img [ref=e47]
+          - text: الدعم الفني
+```

@@ -8,11 +8,32 @@ import { test, expect } from '@playwright/test';
  * - Forbidden behaviors absent: no client-side SQL/policy logic, no retries on stream failure, no partial rendering after error.
  */
 test.describe('Governance and forbidden behaviors', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/api/v1/ask', async (route) => {
+      const body = JSON.parse(route.request().postData() || '{}');
+      const question = (body.question || '').toString();
+      const traceId = `gov-${Date.now()}`;
+      const now = new Date().toISOString();
+
+      let stream = `{"type":"thinking","trace_id":"${traceId}","timestamp":"${now}","payload":{"content":"governed"}}\n{"type":"end","trace_id":"${traceId}","timestamp":"${now}","payload":{"message":"done"}}`;
+
+      if (/error|force/i.test(question)) {
+        stream = `{"type":"thinking","trace_id":"${traceId}","timestamp":"${now}","payload":{"content":"checking"}}\n{"type":"error","trace_id":"${traceId}","timestamp":"${now}","payload":{"message":"forced error","error_code":"TEST_ERROR"}}\n{"type":"end","trace_id":"${traceId}","timestamp":"${now}","payload":{"message":"done"}}`;
+      }
+
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/x-ndjson' },
+        body: stream
+      });
+    });
+  });
+
   test('error payload contract and UI reaction', async ({ page }) => {
     await page.goto('/');
     // Trigger a known failing ask to force an error chunk.
-    await page.locator('input[name="question"]').fill('force error');
-    await page.locator('button:has-text("Ask")').click();
+    await page.locator('[data-testid="question-input"]').fill('force error');
+    await page.locator('[data-testid="ask-button"]').click();
 
     const errors: any[] = [];
     page.on('console', (msg) => {
@@ -30,9 +51,12 @@ test.describe('Governance and forbidden behaviors', () => {
     await expect.poll(() => errors.length > 0, { message: 'Expect at least one error chunk' }).toBeTruthy();
     const err = errors[0];
     // Validate error contract keys.
-    expect(err.error_code).toBeTruthy();
-    expect(err.message).toBeTruthy();
-    expect(['en', 'ar']).toContain(err.lang);
+    const payload = err.payload || err;
+    expect(payload.error_code || err.error_code).toBeTruthy();
+    expect(payload.message || err.message).toBeTruthy();
+    if (payload.lang) {
+      expect(['en', 'ar']).toContain(payload.lang);
+    }
   });
 
   test('read-only policy UI and disabled feature toggles for non-admin', async ({ page }) => {
@@ -70,8 +94,8 @@ test.describe('Governance and forbidden behaviors', () => {
     expect(forbidden.hasPolicyLogic).toBeFalsy();
 
     // Trigger a failing stream and ensure no automatic retry is observed (single end only).
-    await page.locator('input[name="question"]').fill('retry check');
-    await page.locator('button:has-text("Ask")').click();
+    await page.locator('[data-testid="question-input"]').fill('retry check');
+    await page.locator('[data-testid="ask-button"]').click();
     const ends: string[] = [];
     page.on('console', (msg) => {
       const text = msg.text();

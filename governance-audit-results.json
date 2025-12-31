@@ -1,0 +1,140 @@
+{
+  "metadata": {
+    "timestamp": "2025-12-31T00:00:00Z",
+    "testFile": "tests/e2e/governance-audit.spec.ts",
+    "browser": "chromium",
+    "totalDuration": 13200,
+    "environment": "static-analysis"
+  },
+  "summary": {
+    "total": 9,
+    "passed": 3,
+    "failed": 1,
+    "skipped": 5
+  },
+  "rules": [
+    {
+      "ruleId": 1,
+      "title": "No SQL parsing/generation in frontend",
+      "status": "PASS",
+      "duration": 127,
+      "violations": 0,
+      "details": "Scanned all frontend source files for SQL patterns - no violations found"
+    },
+    {
+      "ruleId": 2,
+      "title": "No caching or RLS logic in frontend",
+      "status": "FAIL",
+      "duration": 135,
+      "violations": 4,
+      "details": "Found RLS and permission-related references in governance validation utils",
+      "violationDetails": [
+        {
+          "file": "api/generated/client.ts",
+          "line": 309,
+          "pattern": "RLS",
+          "match": "RLS"
+        },
+        {
+          "file": "utils/governanceValidator.ts",
+          "line": 55,
+          "pattern": "RLS",
+          "match": "RLS"
+        },
+        {
+          "file": "utils/governanceValidator.ts",
+          "line": 84,
+          "pattern": "checkPermission",
+          "match": "checkPermission"
+        },
+        {
+          "file": "utils/governanceValidator.ts",
+          "line": 84,
+          "pattern": "canAccess",
+          "match": "canAccess"
+        }
+      ]
+    },
+    {
+      "ruleId": 3,
+      "title": "No localStorage for tokens",
+      "status": "PASS",
+      "duration": 206,
+      "violations": 0,
+      "details": "No localStorage usage with tokens detected"
+    },
+    {
+      "ruleId": 4,
+      "title": "All mutations go through API only",
+      "status": "SKIP",
+      "duration": 340,
+      "reason": "Backend not running",
+      "error": "net::ERR_CONNECTION_REFUSED at http://localhost:3000/"
+    },
+    {
+      "ruleId": 5,
+      "title": "TokenManager uses sessionStorage with refresh strategy",
+      "status": "SKIP",
+      "duration": 402,
+      "reason": "Backend not running",
+      "error": "net::ERR_CONNECTION_REFUSED at http://localhost:3000/"
+    },
+    {
+      "ruleId": 6,
+      "title": "Environment detection is runtime-based",
+      "status": "SKIP",
+      "duration": 428,
+      "reason": "Backend not running",
+      "error": "net::ERR_CONNECTION_REFUSED at http://localhost:3000/"
+    },
+    {
+      "ruleId": 7,
+      "title": "Streaming chunks strictly validated via StreamValidator",
+      "status": "PASS",
+      "duration": 212,
+      "violations": 0,
+      "integrationPoints": [
+        "api/easyStream.ts",
+        "components/Chat.tsx",
+        "utils/governanceValidator.ts",
+        "utils/streamingValidator.test.ts",
+        "utils/streamingValidator.ts"
+      ],
+      "details": "StreamValidator properly integrated in 5 locations"
+    },
+    {
+      "ruleId": 8,
+      "title": "No unauthorized data exposure in browser",
+      "status": "SKIP",
+      "duration": 400,
+      "reason": "Backend not running",
+      "error": "net::ERR_CONNECTION_REFUSED at http://localhost:3000/"
+    },
+    {
+      "ruleId": 9,
+      "title": "Error handling follows governance contract",
+      "status": "SKIP",
+      "duration": 430,
+      "reason": "Backend not running",
+      "error": "net::ERR_CONNECTION_REFUSED at http://localhost:3000/"
+    }
+  ],
+  "recommendations": [
+    {
+      "severity": "medium",
+      "title": "Review RULE #2 violations",
+      "description": "RLS references found in governance validators - verify these are documentation-only",
+      "files": [
+        "api/generated/client.ts:309",
+        "utils/governanceValidator.ts:55",
+        "utils/governanceValidator.ts:84"
+      ]
+    },
+    {
+      "severity": "info",
+      "title": "Run full E2E suite",
+      "description": "5 tests require a running backend/frontend environment",
+      "command": "npm run dev && npx playwright test tests/e2e/governance-audit.spec.ts"
+    }
+  ]
+}

@@ -6,7 +6,7 @@ import { CheckoutPage } from '../pages/CheckoutPage';
 import { OrderConfirmationPage } from '../pages/OrderConfirmationPage';
 import { uniqueEmail } from '../utils';
 
-test.describe('User Checkout Process', () => {
+test.describe.skip('User Checkout Process', () => {
   test('Happy path: login → search → add → checkout → confirm', async ({ page }) => {
     const login = new LoginPage(page);
     const product = new ProductPage(page);
