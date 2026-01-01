@@ -9,12 +9,13 @@ from app.api.dependencies import require_permission, UserContext
 from app.core.config import get_settings
 from app.services.orchestration_service import OrchestrationService
 from app.services.audit_service import AuditService
+from app.core.tier_router import TierRouter, OperationTier
 
 router = APIRouter(tags=["ask"])
 settings = get_settings()
 
-orchestrator = OrchestrationService()
 audit_service = AuditService()
+tier_router = TierRouter()
 
 
 @router.post("/api/v1/ask")
@@ -34,6 +35,13 @@ async def ask_ndjson(
 
     if settings.STREAM_PROTOCOL != "ndjson":
         raise HTTPException(status_code=404, detail="NDJSON stream disabled")
+    if tier_router.tier != OperationTier.FORTRESS:
+        raise HTTPException(
+            status_code=403,
+            detail="NDJSON contract is available only in tier0_fortress",
+        )
+
+    orchestrator: OrchestrationService = tier_router.resolve_ask_service()  # type: ignore[assignment]
 
     question = payload.get("question")
     top_k = payload.get("top_k", 5)

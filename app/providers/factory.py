@@ -35,7 +35,17 @@ def create_llm_provider(settings: Settings) -> BaseLLMProvider:
         return Phi3Provider(settings)
 
     if provider == "groq":
-        raise ValueError("GroqProvider is disabled; use openai_compatible with OPENAI_BASE_URL")
+        from app.providers.llm.openai_compatible_provider import OpenAICompatibleProvider
+
+        # Map Groq settings into OpenAI-compatible fields for reuse
+        if not settings.OPENAI_API_KEY and settings.GROQ_API_KEY:
+            settings.OPENAI_API_KEY = settings.GROQ_API_KEY
+        if not getattr(settings, "OPENAI_BASE_URL", None) and settings.GROQ_BASE_URL:
+            settings.OPENAI_BASE_URL = settings.GROQ_BASE_URL
+        if not settings.OPENAI_MODEL and settings.GROQ_MODEL:
+            settings.OPENAI_MODEL = settings.GROQ_MODEL
+
+        return OpenAICompatibleProvider(settings)
 
     raise ValueError(f"Unsupported LLM provider: {provider}")
 

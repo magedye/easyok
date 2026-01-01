@@ -7,6 +7,7 @@ import OperationalConsole from './components/OperationalConsole';
 import UnifiedDashboard from './pages/Admin/UnifiedDashboard';
 import TrainingQueuePage from './admin/training/TrainingQueuePage';
 import TrainingMetricsPanel from './admin/training/TrainingMetricsPanel';
+import Tier2AssistantPage from './pages/Tier2AssistantPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import AdminLayout from './layouts/AdminLayout';
 
@@ -56,6 +57,10 @@ export default function App() {
             <Route
               path="/admin"
               element={isAuthed ? <UnifiedDashboard role={role} /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/tier2-assistant"
+              element={isAuthed ? <Tier2AssistantPage /> : <Navigate to="/login" replace />}
             />
             <Route path="/" element={isAuthed ? <Chat /> : <Navigate to="/login" replace />} />
             <Route

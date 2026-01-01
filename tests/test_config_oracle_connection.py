@@ -1,4 +1,18 @@
+import pathlib
+import sys
 import pytest
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+# Load env vars from .env if available so tests reflect real config
+try:  # pragma: no cover - optional dependency
+    from dotenv import load_dotenv
+
+    load_dotenv(ROOT / ".env")
+except Exception:
+    pass
 
 pytest.importorskip("pydantic", reason="pydantic required for Settings tests")
 from app.core.config import Settings

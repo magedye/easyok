@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     VECTOR_DB: Literal["chromadb", "qdrant"] = "chromadb"
 
     # =========================================================================
+    # Operation Tier (Single Switch)
+    # =========================================================================
+    OPERATION_TIER: Literal[
+        "tier0_fortress",
+        "tier1_governed",
+        "tier2_vanna",
+    ] = "tier1_governed"
+
+    # =========================================================================
     # Security Toggles
     # =========================================================================
     AUTH_ENABLED: bool = True
@@ -133,6 +142,7 @@ class Settings(BaseSettings):
 
     GROQ_API_KEY: Optional[str] = None
     GROQ_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
     GROQ_TIMEOUT: int = 30
 
     PHI3_BASE_URL: Optional[str] = None
@@ -154,6 +164,57 @@ class Settings(BaseSettings):
     MAX_SQL_TOKENS: int = 2000
     VANNA_ALLOW_DDL: bool = False
     VANNA_MAX_ROWS: int = 500
+
+    # =========================================================================
+    # Tier 2 — Vanna Native Settings
+    # =========================================================================
+    VANNA_LLM_PROVIDER: Literal[
+        "ollama",
+        "openai",
+        "openai_compatible",
+        "google",
+        "groq",
+    ] = "ollama"
+    VANNA_LLM_MODEL: str = "neural-chat"
+    VANNA_LLM_ENDPOINT: Optional[str] = "http://localhost:11434"
+
+    VANNA_SQLRUNNER_DIALECT: Literal[
+        "oracle",
+        "mssql",
+        "postgres",
+        "sqlite",
+    ] = "postgres"
+    VANNA_SQLRUNNER_CONNECTION: Optional[str] = None
+
+    VANNA_MEMORY_TYPE: Literal[
+        "in_memory",
+        "postgres",
+        "redis",
+        "chroma",
+    ] = "in_memory"
+
+    VANNA_SYSTEM_PROMPT_TEMPLATE: str = (
+        """
+You are an expert data analyst assistant.
+
+Rules:
+- Always explain your reasoning
+- Prefer explicit column names
+- Limit results to 100 unless asked
+- Use EXPLAIN for complex queries
+"""
+    ).strip()
+
+    VANNA_DEFAULT_LIMIT: int = 100
+    VANNA_MAX_EXECUTION_TIME: int = 30
+    VANNA_RATE_LIMIT_REQUESTS: int = 100
+    VANNA_RATE_LIMIT_WINDOW: int = 3600
+
+    VANNA_ENABLE_FEEDBACK: bool = True
+    VANNA_ENABLE_MEMORY: bool = True
+    VANNA_ENABLE_RICH_OUTPUT: bool = True
+    VANNA_ENABLE_CHARTS: bool = True
+    VANNA_DRY_RUN_MODE: bool = False
 
     # =========================================================================
     # Governed Semantic Cache

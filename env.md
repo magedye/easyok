@@ -36,6 +36,10 @@ DB_PROVIDER=oracle
 LLM_PROVIDER=groq
 # Allowed: openai | google | ollama | openai_compatible | groq
 
+# Operation Tier (single switch)
+OPERATION_TIER=tier1_governed
+# Allowed: tier0_fortress | tier1_governed | tier2_vanna
+
 VECTOR_DB=chromadb
 # Allowed: chromadb | qdrant
 
@@ -98,11 +102,16 @@ RLS_MISSING_SCOPE_BEHAVIOR=deny
 # =============================================================================
 # Option A: Full Connection Strings
 ORACLE_CONNECTION_STRING=
+VANNA_SQLRUNNER_DIALECT=oracle
+VANNA_SQLRUNNER_CONNECTION=
 MSSQL_CONNECTION_STRING=
 
 # Option B: Granular Components (Added from Reference Template)
 ORACLE_USER=
 ORACLE_PASSWORD=
+ORACLE_HOST=
+ORACLE_PORT=
+ORACLE_NAME=
 ORACLE_DSN=
 
 
@@ -133,6 +142,7 @@ OTEL_SAMPLER_RATIO=1.0
 OTEL_SERVICE_NAME=easydata-backend
 
 ENABLE_SIGNOZ_ALERTS=false
+CORS_ORIGINS=["http://localhost:5173","http://localhost:5174","http://localhost:5175","http://10.10.10.10:5173","http://10.10.10.10:5174","http://10.10.10.10:5175"]
 
 
 # =============================================================================
@@ -171,6 +181,7 @@ OLLAMA_MODEL=llama3
 # Groq
 GROQ_API_KEY=
 GROQ_MODEL=llama-3.1-8b-instant
+GROQ_BASE_URL=https://api.groq.com/openai/v1
 GROQ_TIMEOUT=30
 
 # OpenAI-Compatible / Phi3 (Added from Reference Template)
@@ -196,6 +207,15 @@ MAX_SQL_TOKENS=2000
 
 VANNA_ALLOW_DDL=false
 VANNA_MAX_ROWS=500
+VANNA_DEFAULT_LIMIT=100
+VANNA_MAX_EXECUTION_TIME=30
+VANNA_RATE_LIMIT_REQUESTS=100
+VANNA_RATE_LIMIT_WINDOW=3600
+VANNA_ENABLE_FEEDBACK=true
+VANNA_ENABLE_MEMORY=true
+VANNA_ENABLE_RICH_OUTPUT=true
+VANNA_ENABLE_CHARTS=true
+VANNA_DRY_RUN_MODE=false
 
 
 # =============================================================================
@@ -455,6 +475,7 @@ class Settings(BaseSettings):
 
     GROQ_API_KEY: Optional[str] = None
     GROQ_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
     GROQ_TIMEOUT: int = 30
 
     PHI3_BASE_URL: Optional[str] = None
@@ -967,6 +988,7 @@ OLLAMA_MODEL=llama3
 # Groq
 GROQ_API_KEY=
 GROQ_MODEL=llama-3.1-8b-instant
+GROQ_BASE_URL=https://api.groq.com/openai/v1
 GROQ_TIMEOUT=30
 
 # OpenAI-Compatible / Phi-3
@@ -1271,6 +1293,7 @@ OLLAMA_MODEL=
 # Groq (Primary)
 GROQ_API_KEY=>>> CHANGE ME <<<
 GROQ_MODEL=llama-3.1-8b-instant
+GROQ_BASE_URL=https://api.groq.com/openai/v1
 GROQ_TIMEOUT=30
 
 # OpenAI-Compatible / Phi-3
@@ -1560,6 +1583,7 @@ OLLAMA_MODEL=
 # Groq (Mock / Disabled)
 GROQ_API_KEY=
 GROQ_MODEL=llama-3.1-8b-instant
+GROQ_BASE_URL=https://api.groq.com/openai/v1
 GROQ_TIMEOUT=30
 
 # OpenAI-Compatible / Phi-3 (Optional Mock)

@@ -49,6 +49,12 @@ class UnauthorizedError(AppException):
     message = "Authentication required"
 
 
+class AuthenticationError(AppException):
+    status_code = 401
+    error_code = "authentication_error"
+    message = "Invalid or expired token"
+
+
 class PermissionDeniedError(AppException):
     status_code = 403
     error_code = "permission_denied"

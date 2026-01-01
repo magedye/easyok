@@ -13,14 +13,15 @@ from app.services.audit_service import AuditService
 from app.services.factory import ServiceFactory
 from app.core.exceptions import InvalidQueryError
 from app.models.enums.confidence_tier import ConfidenceTier
+from app.core.tier_router import TierRouter, OperationTier
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind
 import hashlib
 
 router = APIRouter(tags=["query"])
-orchestration_service = OrchestrationService()
 audit_service = AuditService()
 tracer = trace.get_tracer(__name__)
+tier_router = TierRouter()
 
 
 def _ts() -> str:
@@ -64,6 +65,13 @@ async def ask(
         raise HTTPException(status_code=401, detail="Authentication required")
     if settings.STREAM_PROTOCOL != "ndjson":
         raise HTTPException(status_code=404, detail="NDJSON stream disabled")
+    if tier_router.tier != OperationTier.FORTRESS:
+        raise HTTPException(
+            status_code=403,
+            detail="NDJSON contract is available only in tier0_fortress",
+        )
+
+    orchestration_service: OrchestrationService = tier_router.resolve_ask_service()  # type: ignore[assignment]
 
     async def ndjson_stream():
         """Stream NDJSON chunks in strict order: technical_view -> data -> chart -> summary."""

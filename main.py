@@ -37,6 +37,8 @@ from app.api.v1 import (
     schema,
     training,
 )
+from app.api.v1 import vanna as v1_vanna
+from app.api.v2 import vanna as v2_vanna
 from app.api.v1.admin.settings import router as admin_settings_router
 from app.api.v1.admin.observability import router as admin_observability_router
 from app.api.v1.admin.training import router as admin_training_router
@@ -53,6 +55,7 @@ tags_metadata = [{"name": "health", "description": "Health endpoints"}]
 
 def create_app() -> FastAPI:
     """Factory function to create the FastAPI application."""
+    # GOVERNANCE LOCK: These calls enforce security policies
     enforce_environment_policy()
     bootstrap_local_schema_policy()
     assert_training_readiness()
@@ -117,6 +120,7 @@ def create_app() -> FastAPI:
     app.include_router(api_catalog.router, prefix="/api/v1")
     app.include_router(observability.router, prefix="/api/v1")
     app.include_router(analytics.router, prefix="/api/v1")
+    app.include_router(v1_vanna.router, prefix="/api/v1")
     app.include_router(rag_quality.router, prefix="/api/v1")
     app.include_router(admin_settings_router, prefix="/api/v1")
     app.include_router(admin_observability_router, prefix="/api/v1")
@@ -124,6 +128,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_sandbox_router, prefix="/api/v1")
     # Health router already has prefix="/health"; include at /api/v1
     app.include_router(health.router, prefix="/api/v1")
+    app.include_router(v2_vanna.router)
 
     @app.get("/metrics/json", tags=["health"])
     async def metrics_json():

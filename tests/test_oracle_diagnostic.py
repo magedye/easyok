@@ -10,8 +10,22 @@ These tests are meant to be opt-in integration checks. They will not fail CI
 when Oracle is not configured; instead they will be skipped with clear reasons.
 """
 import os
+import pathlib
 import pytest
 import traceback
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+# Load env vars from .env so diagnostics reflect configured credentials
+try:  # pragma: no cover - optional dependency
+    from dotenv import load_dotenv
+
+    load_dotenv(ROOT / ".env")
+except Exception:
+    pass
 
 # Skip entire module if pydantic (and pydantic-settings) are not available
 pytest.importorskip("pydantic", reason="Pydantic not installed; skipping Oracle diagnostics")

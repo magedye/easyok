@@ -89,13 +89,15 @@ class OracleProvider(BaseDatabaseProvider):
         Parse common Oracle connection strings:
         - user/password@host:port/service
         - user/password@host:port:sid
+        - user:password@host:port/service
+        - user:password@host:port:sid
         - oracle+oracledb://user:password@host:port/service
         """
         pattern = re.compile(
             r"(?:(?:[a-zA-Z0-9_+\-]+)://)?"  # optional scheme
-            r"(?P<user>[^:@/]+):(?P<pw>[^@]+)@"
+            r"(?P<user>[^:@/]+)(?P<auth_sep>[:/])(?P<pw>[^@]+)@"
             r"(?:/{2})?"  # optional double slash after @
-            r"(?P<host>[^:/]+):(?P<port>\\d+)"
+            r"(?P<host>[^:/]+):(?P<port>\d+)"
             r"(?P<sep>[:/])"
             r"(?P<name>[^/?]+)"
             r"$"
@@ -103,7 +105,7 @@ class OracleProvider(BaseDatabaseProvider):
         m = pattern.match(conn_str)
         if not m:
             raise InvalidConnectionStringError(
-                "INVALID_CONNECTION_STRING: expected user/password@host:port/service or user/password@host:port:sid"
+                "INVALID_CONNECTION_STRING: expected user/password@host:port/service (or :sid), user:password@host:port/service (or :sid), or oracle+oracledb://user:password@host:port/service"
             )
 
         user = m.group("user")
