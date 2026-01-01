@@ -287,6 +287,10 @@ Rules:
         extra="ignore",
     )
 
+    # =========================================================================
+    # Validators & Normalization
+    # =========================================================================
+
     @field_validator("ORACLE_CONNECTION_STRING")
     @classmethod
     def sanitise_oracle_connection_string(
@@ -318,6 +322,23 @@ Rules:
             return f"{m.group('user')}/{m.group('pw')}@{m.group('host')}:{m.group('port')}/{m.group('service')}"
 
         return v_clean
+
+    def model_post_init(self, __context) -> None:
+        """
+        Tier-2 normalization (non-destructive).
+
+        Applied ONLY when OPERATION_TIER == 'tier2_vanna'
+        and ONLY if the user did not explicitly configure the value.
+        """
+        if self.OPERATION_TIER == "tier2_vanna":
+            # If default limit is still the strict 100, remove it for Tier-2
+            if self.VANNA_DEFAULT_LIMIT == 100:
+                self.VANNA_DEFAULT_LIMIT = 0
+
+            # If training readiness is enforced, disable it for Tier-2 productivity
+            if self.TRAINING_READINESS_ENFORCED is True:
+                self.TRAINING_READINESS_ENFORCED = False
+
 
 @lru_cache
 def get_settings(force_reload: bool = False) -> Settings:

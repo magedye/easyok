@@ -1,182 +1,152 @@
+"""
+Abstract provider interfaces and Service contracts.
+
+Providers connect the application to external systems.
+Services define the business logic contracts.
+"""
+
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Iterable, List
+from typing import Any, Iterable, Tuple, Dict, List, Optional
 from uuid import UUID
 
-from app.models.api import (
-    AskRequest,
-    BaseChunk,
-    QueryAssetCreate,
-    ScheduleCreate,
-    TrainingItemRequest,
-    SandboxPromotion,
-)
+# =========================================================================
+# Providers (External System Connectors)
+# =========================================================================
 
-
-# =====================================================
-# Core Orchestration
-# =====================================================
-
-class OrchestrationService(ABC):
+class BaseDatabaseProvider(ABC):
     """
-    The single authority for governed execution.
-    Exploration may suggest. Governance executes.
+    Contract for database providers.
+
+    Tier-2 note:
+    This interface does NOT imply read-only execution. Governance,
+    if required, is enforced at higher layers.
     """
 
     @abstractmethod
-    def execute(self, request: AskRequest) -> Iterable[BaseChunk]:
-        """
-        Execute a governed analytical request.
-        Must return NDJSON chunks in correct order.
-        """
-        raise NotImplementedError
+    def connect(self) -> Any:
+        """Create and return a live database connection."""
+
+    @abstractmethod
+    def execute(
+        self, sql: str, parameters: Dict[str, Any] | None = None
+    ) -> List[Dict[str, Any]]:
+        """Execute SQL and return rows as dictionaries."""
 
 
-# =====================================================
-# Exploration / Sandbox
-# =====================================================
+class BaseVectorStore(ABC):
+    """Contract for vector store providers used in RAG."""
 
-class ShadowExecutionService(ABC):
+    @abstractmethod
+    def add_documents(
+        self, documents: Iterable[str], metadatas: Iterable[Dict[str, Any]]
+    ) -> None:
+        """Add documents and metadata to the vector store."""
+
+    @abstractmethod
+    def query(
+        self, query_text: str, n_results: int
+    ) -> List[Tuple[str, Dict[str, Any]]]:
+        """Return the top N documents similar to the query text."""
+
+
+class BaseLLMProvider(ABC):
     """
-    Fully isolated sandbox execution.
-    Never touches production DB or vector store.
+    Contract for all LLM providers.
     """
 
     @abstractmethod
-    def run(self, sql: str, trace_id: UUID) -> List[Dict[str, Any]]:
-        """
-        Execute exploratory SQL in sandbox context.
-        """
-        raise NotImplementedError
+    async def generate_sql(self, prompt: str) -> str:
+        ...
 
+    @abstractmethod
+    async def health_check(self) -> Dict[str, Any]:
+        ...
+
+
+# =========================================================================
+# Services (Business Logic Contracts)
+# =========================================================================
 
 class AdvisorService(ABC):
-    """
-    Advisory-only intelligence layer.
-    """
-
+    """Contract for SQL analysis and fix suggestions."""
     @abstractmethod
-    def explain_sql(self, sql: str) -> str:
-        raise NotImplementedError
-
+    def explain_sql(self, sql: str) -> str: ...
+    
     @abstractmethod
-    def suggest_fix(self, sql: str, error: str) -> str:
-        raise NotImplementedError
-
+    def suggest_fix(self, sql: str, error: str) -> str: ...
+    
     @abstractmethod
-    def suggest_chart(self, columns: List[str]) -> Dict[str, Any]:
-        raise NotImplementedError
+    def suggest_chart(self, columns: List[str]) -> Dict[str, Any]: ...
 
 
-# =====================================================
-# Training & Knowledge
-# =====================================================
+class ShadowExecutionService(ABC):
+    """Contract for running queries in shadow mode (tracing only)."""
+    @abstractmethod
+    def run(self, sql: str, trace_id: UUID) -> List[Dict[str, Any]]: ...
+
 
 class TrainingService(ABC):
-    """
-    Governed training pipeline (Admin-only).
-    No auto-training allowed.
-    """
-
+    """Contract for feedback loop and RLHF."""
     @abstractmethod
-    def submit_item(self, item: TrainingItemRequest, item_type: str) -> UUID:
-        raise NotImplementedError
-
+    def submit_item(self, item: Any, item_type: str) -> UUID: ...
+    
     @abstractmethod
-    def approve_assumption(self, assumption_id: UUID, reason: str) -> None:
-        raise NotImplementedError
-
+    def approve_assumption(self, assumption_id: UUID, reason: str) -> None: ...
+    
     @abstractmethod
-    def reject_assumption(self, assumption_id: UUID, reason: str) -> None:
-        raise NotImplementedError
+    def reject_assumption(self, assumption_id: UUID, reason: str) -> None: ...
 
-
-# =====================================================
-# Assets
-# =====================================================
 
 class AssetService(ABC):
-    """
-    QueryAsset lifecycle management.
-    """
-
+    """Contract for managing saved queries/assets."""
     @abstractmethod
-    def create(self, payload: QueryAssetCreate) -> UUID:
-        raise NotImplementedError
-
+    def create(self, payload: Any) -> UUID: ...
+    
     @abstractmethod
-    def list(self, user_id: UUID) -> List[Dict[str, Any]]:
-        raise NotImplementedError
-
+    def list(self, user_id: UUID) -> List[Dict[str, Any]]: ...
+    
     @abstractmethod
-    def share(self, asset_id: UUID, target: str) -> None:
-        raise NotImplementedError
-
+    def share(self, asset_id: UUID, target: str) -> None: ...
+    
     @abstractmethod
-    def archive(self, asset_id: UUID) -> None:
-        raise NotImplementedError
+    def archive(self, asset_id: UUID) -> None: ...
 
-
-# =====================================================
-# Scheduling
-# =====================================================
 
 class SchedulingService(ABC):
-    """
-    Headless execution of approved assets only.
-    """
-
+    """Contract for scheduled report execution."""
     @abstractmethod
-    def create_schedule(self, payload: ScheduleCreate) -> UUID:
-        raise NotImplementedError
-
+    def create_schedule(self, payload: Any) -> UUID: ...
+    
     @abstractmethod
-    def disable_schedule(self, schedule_id: UUID, reason: str) -> None:
-        raise NotImplementedError
+    def disable_schedule(self, schedule_id: UUID, reason: str) -> None: ...
 
-
-# =====================================================
-# Governance & Admin
-# =====================================================
 
 class AuditService(ABC):
-    """
-    Immutable audit logging.
-    """
-
+    """Contract for compliance logging."""
     @abstractmethod
-    def log(self, event_type: str, payload: Dict[str, Any]) -> None:
-        raise NotImplementedError
+    def log(self, event_type: str, payload: Dict[str, Any], **kwargs) -> None: ...
 
 
 class SchemaDriftService(ABC):
-    """
-    Detects and tracks schema drift.
-    """
-
+    """Contract for detecting database schema changes."""
     @abstractmethod
-    def detect(self) -> List[Dict[str, Any]]:
-        raise NotImplementedError
+    def detect(self) -> List[Dict[str, Any]]: ...
 
 
 class FeatureToggleService(ABC):
-    """
-    Runtime feature switches (admin-governed).
-    """
-
+    """Contract for dynamic feature management."""
     @abstractmethod
-    def set(self, feature: str, enabled: bool, reason: str) -> None:
-        raise NotImplementedError
+    def set(self, feature: str, enabled: bool, reason: str) -> None: ...
 
-
-# =====================================================
-# Sandbox Promotion
-# =====================================================
 
 class SandboxPromotionService(ABC):
-    """
-    Admin-only promotion of sandbox discoveries.
-    """
-
+    """Contract for promoting sandbox assets to production."""
     @abstractmethod
-    def promote(self, payload: SandboxPromotion) -> None:
-        raise NotImplementedError
+    def promote(self, payload: Any) -> None: ...
+
+
+class OrchestrationService(ABC):
+    """Contract for the main query pipeline orchestration."""
+    # Note: Often implemented concretely in orchestration_service.py, 
+    # but defined here as ABC for NoOp implementations to inherit from.
+    pass

@@ -1,0 +1,1088 @@
+/home/mfadmin/easyok/app/providers/factory.py
+"""
+Provider factory module.
+
+This factory inspects application settings and returns the appropriate
+database, vector store, and language model providers.  It avoids
+importing heavy drivers unless necessary and isolates provider
+instantiation from the rest of the codebase.
+"""
+
+from app.core.config import Settings
+from app.providers.base import BaseLLMProvider
+
+
+def create_llm_provider(settings: Settings) -> BaseLLMProvider:
+    provider = settings.LLM_PROVIDER.lower()
+
+    if provider == "openai_compatible":
+        from app.providers.llm.openai_compatible_provider import OpenAICompatibleProvider
+        return OpenAICompatibleProvider(settings)
+
+    if provider == "openai":
+        from app.providers.llm.openai_provider import OpenAIProvider
+        return OpenAIProvider(settings)
+
+    if provider == "google":
+        from app.providers.llm.google_provider import GoogleProvider
+        return GoogleProvider(settings)
+
+    if provider == "ollama":
+        from app.providers.llm.ollama_provider import OllamaProvider
+        return OllamaProvider(settings)
+
+    if provider == "phi3":
+        from app.providers.llm.phi3_provider import Phi3Provider
+        return Phi3Provider(settings)
+
+    if provider == "groq":
+        from app.providers.llm.openai_compatible_provider import OpenAICompatibleProvider
+
+        # Map Groq settings into OpenAI-compatible fields for reuse
+        if not settings.OPENAI_API_KEY and settings.GROQ_API_KEY:
+            settings.OPENAI_API_KEY = settings.GROQ_API_KEY
+        if not getattr(settings, "OPENAI_BASE_URL", None) and settings.GROQ_BASE_URL:
+            settings.OPENAI_BASE_URL = settings.GROQ_BASE_URL
+        if not settings.OPENAI_MODEL and settings.GROQ_MODEL:
+            settings.OPENAI_MODEL = settings.GROQ_MODEL
+
+        return OpenAICompatibleProvider(settings)
+
+    raise ValueError(f"Unsupported LLM provider: {provider}")
+
+
+def create_db_provider(settings: Settings):
+    """Return a concrete database provider based on settings.DB_PROVIDER."""
+    provider = settings.DB_PROVIDER.lower()
+
+    if provider == "oracle":
+        from app.providers.database.oracle_provider import OracleProvider
+
+        return OracleProvider(settings)
+
+    if provider == "mssql":
+        from app.providers.database.mssql_provider import MSSQLProvider
+
+        return MSSQLProvider(settings)
+
+    raise ValueError(f"Unsupported DB provider: {provider}")
+
+
+def create_vector_provider(settings: Settings):
+    """Return a concrete vector store provider based on settings.VECTOR_DB."""
+    provider = settings.VECTOR_DB.lower()
+
+    if provider == "chromadb":
+        from app.providers.vector.chroma_provider import ChromaProvider
+
+        return ChromaProvider(settings)
+
+    if provider == "qdrant":
+        from app.providers.vector.qdrant_provider import QdrantProvider
+
+        return QdrantProvider(settings)
+
+    raise ValueError(f"Unsupported VECTOR DB provider: {provider}")
+
+
+def create_training_embedding_service(settings: Settings):
+    from app.services.training_embedding_service import TrainingEmbeddingService
+
+    return TrainingEmbeddingService()
+
+
+
+
+/home/mfadmin/easyok/app/providers/base.py
+
+"""
+Abstract provider interfaces.
+
+Providers connect the application to external systems such as databases,
+vector stores, and language models.  Subclasses must implement the
+methods defined here.  See `providers/factory.py` for how to obtain
+concrete providers based on configuration.
+"""
+
+from abc import ABC, abstractmethod
+from typing import Any, Iterable, Tuple, Dict, List
+
+
+class BaseDatabaseProvider(ABC):
+    """Contract for database providers handling read‑only queries."""
+
+    @abstractmethod
+    def connect(self) -> Any:
+        """Create and return a live database connection or session."""
+
+    @abstractmethod
+    def execute(self, sql: str, parameters: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
+        """Execute a read‑only query and return rows as dictionaries."""
+
+
+class BaseVectorStore(ABC):
+    """Contract for vector store providers used in RAG."""
+
+    @abstractmethod
+    def add_documents(self, documents: Iterable[str], metadatas: Iterable[Dict[str, Any]]) -> None:
+        """Add documents and metadata to the vector store."""
+
+    @abstractmethod
+    def query(self, query_text: str, n_results: int) -> List[Tuple[str, Dict[str, Any]]]:
+        """Return the top N documents similar to the query text."""
+
+
+class BaseLLMProvider(ABC):
+    """
+    Contract for all LLM providers
+    """
+
+    @abstractmethod
+    async def generate_sql(self, prompt: str) -> str:
+        ...
+
+    @abstractmethod
+    async def health_check(self) -> Dict[str, Any]:
+        """
+        Must return:
+        {
+            "status": "healthy" | "unhealthy",
+            "provider": str,
+            "model": str,
+            "latency_ms": int | None,
+            "error": str | None
+        }
+        """
+        ...
+
+
+
+
+
+        /home/mfadmin/easyok/app/core/settings.py
+        from __future__ import annotations
+
+import re
+from functools import lru_cache
+from typing import Literal, Optional
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, ValidationInfo, field_validator
+
+
+class Settings(BaseSettings):
+    # =========================================================================
+    # Environment & Identity
+    # =========================================================================
+    ENV: Literal["local", "ci", "production"] = "production"
+    APP_ENV: Literal["development", "staging", "production"] = "production"
+    APP_NAME: str = "EasyData"
+    APP_VERSION: str = "16.7.x"
+    DEBUG: bool = False
+
+    # =========================================================================
+    # Core Provider Selectors
+    # =========================================================================
+    DB_PROVIDER: Literal["oracle", "mssql"] = "oracle"
+    LLM_PROVIDER: Literal["openai", "google", "ollama", "openai_compatible", "groq"] = "groq"
+    VECTOR_DB: Literal["chromadb", "qdrant"] = "chromadb"
+
+    # =========================================================================
+    # Operation Tier (Single Switch)
+    # =========================================================================
+    OPERATION_TIER: Literal[
+        "tier0_fortress",
+        "tier1_governed",
+        "tier2_vanna",
+    ] = "tier1_governed"
+
+    # =========================================================================
+    # Security Toggles
+    # =========================================================================
+    AUTH_ENABLED: bool = True
+    RBAC_ENABLED: bool = True
+    RLS_ENABLED: bool = True
+    ADMIN_LOCAL_BYPASS: bool = False
+
+    # =========================================================================
+    # Feature Toggles
+    # =========================================================================
+    ENABLE_LOGGING: bool = True
+    ENABLE_AUDIT_LOGGING: bool = True
+    ENABLE_RATE_LIMIT: bool = True
+    ENABLE_GZIP_COMPRESSION: bool = True
+    ENABLE_PERFORMANCE: bool = True
+    ENABLE_TRAINING_PILOT: bool = False
+    TRAINING_READINESS_ENFORCED: bool = True
+    ENABLE_RAG_QUALITY: bool = False
+    EASYDATA_ALLOW_LOCAL_NO_SCHEMA_POLICY: bool = False
+
+    # =========================================================================
+    # JWT Configuration
+    # =========================================================================
+    JWT_ALGORITHM: Literal["HS256", "RS256", "ES256"] = "HS256"
+    JWT_SECRET_KEY: Optional[str] = None
+    JWT_PUBLIC_KEY: Optional[str] = None
+    JWT_JWKS_URL: Optional[str] = None
+    JWT_EXPIRATION_MINUTES: int = 60
+    JWT_ISSUER: Optional[str] = None
+    JWT_AUDIENCE: Optional[str] = None
+    JWT_HEADER_NAME: str = "Authorization"
+    JWT_HEADER_PREFIX: str = "Bearer"
+
+    # =========================================================================
+    # RBAC & Authorization
+    # =========================================================================
+    RBAC_ROLES_CLAIM: str = "roles"
+    RBAC_DEFAULT_ROLE: str = "viewer"
+    RBAC_ADMIN_ROLE: str = "admin"
+
+    # =========================================================================
+    # Row Level Security (RLS)
+    # =========================================================================
+    RLS_SCOPE_CLAIM: str = "tenant_id"
+    RLS_MISSING_SCOPE_BEHAVIOR: Literal["deny", "allow"] = "deny"
+
+    # =========================================================================
+    # User / Business Database
+    # =========================================================================
+    ORACLE_CONNECTION_STRING: Optional[str] = None
+    MSSQL_CONNECTION_STRING: Optional[str] = None
+    ORACLE_USER: Optional[str] = None
+    ORACLE_PASSWORD: Optional[str] = None
+    ORACLE_DSN: Optional[str] = None
+
+    # =========================================================================
+    # System Database
+    # =========================================================================
+    SYSTEM_DB_TYPE: Literal["sqlite", "postgres"] = "sqlite"
+    SYSTEM_DB_PATH: str = "./data/logs.db"
+
+    # =========================================================================
+    # Vector Store
+    # =========================================================================
+    VECTOR_STORE_PATH: str = "./data/vectorstore"
+    QDRANT_URL: Optional[str] = None
+    QDRANT_API_KEY: Optional[str] = None
+
+    # =========================================================================
+    # Observability & Tracing
+    # =========================================================================
+    ENABLE_TELEMETRY: bool = True
+    ANON_TELEMETRY: bool = True
+    ENABLE_OTEL: bool = True
+    OTEL_EXPORTER_OTLP_ENDPOINT: Optional[str] = None
+    OTEL_SAMPLER_RATIO: float = 1.0
+    OTEL_SERVICE_NAME: str = "easydata-backend"
+    ENABLE_SIGNOZ_ALERTS: bool = False
+
+    # =========================================================================
+    # Sentry
+    # =========================================================================
+    SENTRY_DSN: Optional[str] = None
+    SENTRY_ENVIRONMENT: str = "production"
+    SENTRY_TRACES_SAMPLE_RATE: float = 1.0
+    SENTRY_ATTACH_STACKTRACE: bool = True
+    SENTRY_ENABLE_OTEL_BRIDGE: bool = True
+    SENTRY_API_TOKEN: Optional[str] = None
+    SENTRY_ORG_SLUG: Optional[str] = None
+    SENTRY_PROJECT_SLUG: Optional[str] = None
+
+    # =========================================================================
+    # LLM Providers
+    # =========================================================================
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: Optional[str] = None
+    OPENAI_BASE_URL: Optional[str] = None
+    OPENAI_TIMEOUT: int = 30
+
+    GOOGLE_API_KEY: Optional[str] = None
+    GOOGLE_MODEL: str = "gemini-1.5-pro"
+
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3"
+
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+    GROQ_TIMEOUT: int = 30
+
+    PHI3_BASE_URL: Optional[str] = None
+    PHI3_MODEL: str = "phi-3"
+    PHI3_API_KEY: Optional[str] = None
+    PHI3_TIMEOUT: int = 30
+
+    # =========================================================================
+    # Shared LLM Controls
+    # =========================================================================
+    LLM_TEMPERATURE: float = Field(0.1, ge=0.0, le=1.0)
+    LLM_MAX_TOKENS: int = 2048
+    LLM_REQUEST_TIMEOUT: int = 60
+
+    # =========================================================================
+    # RAG / Vanna Controls
+    # =========================================================================
+    RAG_TOP_K: int = 5
+    MAX_SQL_TOKENS: int = 2000
+    VANNA_ALLOW_DDL: bool = False
+    VANNA_MAX_ROWS: int = 500
+
+    # =========================================================================
+    # Tier 2 — Vanna Native Settings
+    # =========================================================================
+    VANNA_LLM_PROVIDER: Literal[
+        "ollama",
+        "openai",
+        "openai_compatible",
+        "google",
+        "groq",
+    ] = "ollama"
+    VANNA_LLM_MODEL: str = "neural-chat"
+    VANNA_LLM_ENDPOINT: Optional[str] = "http://localhost:11434"
+
+    VANNA_SQLRUNNER_DIALECT: Literal[
+        "oracle",
+        "mssql",
+        "postgres",
+        "sqlite",
+    ] = "postgres"
+    VANNA_SQLRUNNER_CONNECTION: Optional[str] = None
+
+    VANNA_MEMORY_TYPE: Literal[
+        "in_memory",
+        "postgres",
+        "redis",
+        "chroma",
+    ] = "in_memory"
+
+    VANNA_SYSTEM_PROMPT_TEMPLATE: str = (
+        """
+You are an expert data analyst assistant.
+
+Rules:
+- Always explain your reasoning
+- Prefer explicit column names
+- Limit results to 100 unless asked
+- Use EXPLAIN for complex queries
+"""
+    ).strip()
+
+    VANNA_DEFAULT_LIMIT: int = 100
+    VANNA_MAX_EXECUTION_TIME: int = 30
+    VANNA_RATE_LIMIT_REQUESTS: int = 100
+    VANNA_RATE_LIMIT_WINDOW: int = 3600
+
+    VANNA_ENABLE_FEEDBACK: bool = True
+    VANNA_ENABLE_MEMORY: bool = True
+    VANNA_ENABLE_RICH_OUTPUT: bool = True
+    VANNA_ENABLE_CHARTS: bool = True
+    VANNA_DRY_RUN_MODE: bool = False
+
+    # =========================================================================
+    # Governed Semantic Cache
+    # =========================================================================
+    ENABLE_SEMANTIC_CACHE: bool = False
+    SEMANTIC_CACHE_SIMILARITY_THRESHOLD: float = 0.85
+    SEMANTIC_CACHE_MAX_RESULTS: int = 3
+    SEMANTIC_CACHE_TTL_SECONDS: int = 3600
+    SEMANTIC_CACHE_GOVERNANCE_MODE: Literal["revalidate"] = "revalidate"
+    SEMANTIC_CACHE_STORE_SQL: bool = True
+    SEMANTIC_CACHE_STORE_RESULTS: bool = True
+    REDIS_URL: Optional[str] = None
+
+    # =========================================================================
+    # Admin Feature Governance
+    # =========================================================================
+    ADMIN_FEATURE_TOGGLE_API_ENABLED: bool = True
+    ADMIN_FEATURE_TOGGLE_REQUIRE_REASON: bool = True
+    ADMIN_FEATURE_TOGGLE_EMIT_OTEL: bool = True
+
+    # =========================================================================
+    # Arabic NLP Pipeline
+    # =========================================================================
+    ENABLE_ARABIC_NLP: bool = True
+    ENABLE_CAMEL_TOOLS: bool = True
+    ENABLE_FARASA: bool = False
+    FARASA_MODEL_PATH: Optional[str] = None
+    ARABIC_EMBEDDING_MODEL: str = "CAMeL-Lab/bert-base-arabic-camelbert-da"
+    ARABIC_PREPROCESS_BEFORE_RAG: bool = True
+
+    # =========================================================================
+    # RAG Quality Governance (RAGAS)
+    # =========================================================================
+    ENABLE_RAGAS_EVALUATION: bool = False
+    RAGAS_METRICS: str = "context_precision,context_recall,faithfulness,answer_relevance"
+    RAGAS_EXECUTION_MODE: Literal["async"] = "async"
+    RAGAS_LINK_TO_AUDIT_LOG: bool = True
+
+    # =========================================================================
+    # Rate Limiting
+    # =========================================================================
+    RATE_LIMIT_REQUESTS_PER_MINUTE: int = 60
+    RATE_LIMIT_SCOPE: Literal["user", "ip", "global"] = "user"
+
+    # =========================================================================
+    # Health Checks
+    # =========================================================================
+    HEALTH_CHECK_ENABLED: bool = True
+    HEALTH_CHECK_TIMEOUT: int = 5
+    HEALTH_AGGREGATION_MODE: Literal["strict", "degraded"] = "degraded"
+
+    # =========================================================================
+    # API Server / Runtime Controls
+    # =========================================================================
+    BACKEND_PORT: int = 8000
+    CORS_ORIGINS: list[str] = Field(default_factory=list)
+    STREAM_PROTOCOL: Literal["ndjson", "sse"] = "ndjson"
+    DEFAULT_ROW_LIMIT: int = 100
+
+    # =========================================================================
+    # Sandbox / Shadow Execution
+    # =========================================================================
+    SANDBOX_DATA_STRATEGY: Literal["schema_only", "masked_snapshot", "synthetic_data"] = "schema_only"
+    SANDBOX_SENSITIVE_COLUMNS: list[str] = Field(default_factory=list)
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
+
+    @field_validator("ORACLE_CONNECTION_STRING")
+    @classmethod
+    def sanitise_oracle_connection_string(
+        cls, v: Optional[str], info: ValidationInfo
+    ) -> Optional[str]:
+        if v is None:
+            return None
+
+        v_clean = str(v).strip()
+        if not v_clean:
+            return v_clean
+
+        # Remove trailing markers/comments by taking the first token.
+        v_clean = v_clean.split()[0]
+
+        # Strip surrounding quotes.
+        if (v_clean.startswith('"') and v_clean.endswith('"')) or (
+            v_clean.startswith("'") and v_clean.endswith("'")
+        ):
+            v_clean = v_clean[1:-1]
+
+        # Normalize URL-style DSN to oracledb.connect format:
+        # oracle+oracledb://user:pw@host:port/service -> user/pw@host:port/service
+        m = re.match(
+            r"^(?:[a-zA-Z0-9_+\-]+://)?(?P<user>[^:]+):(?P<pw>[^@]+)@(?P<host>[^:/]+):(?P<port>\d+)[/\\](?P<service>.+)$",
+            v_clean,
+        )
+        if m:
+            return f"{m.group('user')}/{m.group('pw')}@{m.group('host')}:{m.group('port')}/{m.group('service')}"
+
+        return v_clean
+
+@lru_cache
+def get_settings(force_reload: bool = False) -> Settings:
+    if force_reload:
+        get_settings.cache_clear()
+    return Settings()
+
+
+settings = get_settings()
+
+
+
+
+
+
+
+/home/mfadmin/easyok/app/services/vanna_common.py
+
+from __future__ import annotations
+
+import asyncio
+import re
+from typing import Any, Dict, Optional
+
+import pandas as pd
+import sqlparse
+from vanna.capabilities.sql_runner import RunSqlToolArgs, SqlRunner
+from vanna.core.llm import LlmService
+from vanna.core.user import RequestContext, User, UserResolver
+from vanna.integrations.google import GeminiLlmService
+from vanna.integrations.ollama import OllamaLlmService
+from vanna.integrations.openai import OpenAILlmService
+from vanna.tools import RunSqlTool, VisualizeDataTool
+
+from app.core.settings import Settings
+from app.providers.factory import create_db_provider
+
+
+class ContextUserResolver(UserResolver):
+    """
+    Resolve Vanna RequestContext into a minimal User object using metadata carried
+    from the API layer. Keeps group memberships aligned with the upstream role.
+    """
+
+    async def resolve_user(self, request_context: RequestContext) -> User:
+        meta = request_context.metadata or {}
+        user_ctx = meta.get("user_context", {}) or {}
+        role = user_ctx.get("role", "guest")
+        groups = list(user_ctx.get("groups", []))
+        if role and role not in groups:
+            groups.append(role)
+
+        user_id = user_ctx.get("user_id", "anonymous")
+        username = user_ctx.get("username") or user_id
+        email = user_ctx.get("email") or f"{user_id}@local"
+
+        return User(
+            id=str(user_id),
+            username=username,
+            email=email,
+            group_memberships=groups,
+            metadata=user_ctx,
+        )
+
+
+def build_request_context(user_context: Optional[Dict[str, Any]] = None) -> RequestContext:
+    """
+    Build a Vanna RequestContext that carries the upstream user context inside metadata.
+    """
+    return RequestContext(
+        cookies={},
+        headers={},
+        remote_addr=None,
+        query_params={},
+        metadata={"user_context": user_context or {}},
+    )
+
+
+def _format_sql(sql: str, dialect: str, default_limit: int) -> str:
+    """
+    Sanitize and format SQL using sqlparse (0.5.x) with a dialect-aware LIMIT injector.
+    """
+    if not isinstance(sql, str) or not sql.strip():
+        raise ValueError("SQL text is required")
+
+    cleaned = sql.strip()
+
+    if "```" in cleaned:
+        fence_match = re.search(r"```(?:sql)?\\s*(.*?)\\s*```", cleaned, re.S | re.I)
+        if fence_match:
+            cleaned = fence_match.group(1)
+
+    formatted = sqlparse.format(
+        cleaned,
+        strip_comments=True,
+        reindent=True,
+        keyword_case="upper",
+    ).strip()
+
+    first_token = formatted.split()[:1]
+    if not first_token or first_token[0].upper() not in {"SELECT", "WITH"}:
+        raise ValueError("Only SELECT/CTE queries are permitted")
+
+    formatted_no_semicolon = formatted.rstrip(";")
+    upper_sql = formatted_no_semicolon.upper()
+
+    has_limit = any(
+        marker in upper_sql
+        for marker in (" LIMIT ", " FETCH FIRST ", " OFFSET ", " TOP ")
+    )
+    if default_limit and not has_limit:
+        if dialect == "oracle":
+            formatted_no_semicolon = f"{formatted_no_semicolon} FETCH FIRST {default_limit} ROWS ONLY"
+        elif dialect == "mssql":
+            formatted_no_semicolon = re.sub(
+                r"^SELECT\\s+",
+                f"SELECT TOP {default_limit} ",
+                formatted_no_semicolon,
+                count=1,
+                flags=re.I,
+            )
+        else:
+            formatted_no_semicolon = f"{formatted_no_semicolon} LIMIT {default_limit}"
+
+    return formatted_no_semicolon
+
+
+class GuardedSqlRunner(SqlRunner):
+    """
+    SqlRunner implementation that reuses existing DB providers while enforcing
+    lightweight governance (read-only SELECT + LIMIT injection).
+    """
+
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        self.db = create_db_provider(settings)
+        self.dialect = settings.VANNA_SQLRUNNER_DIALECT.lower()
+        self.default_limit = settings.VANNA_DEFAULT_LIMIT or settings.DEFAULT_ROW_LIMIT
+        self._recent: Dict[tuple[str, str], Dict[str, Any]] = {}
+        self._by_conversation: Dict[str, Dict[str, Any]] = {}
+
+    async def run_sql(self, args: RunSqlToolArgs, context) -> pd.DataFrame:
+        sanitized = _format_sql(
+            args.sql,
+            dialect=self.dialect,
+            default_limit=self.default_limit,
+        )
+
+        # Execute in a thread to avoid blocking the event loop with sync drivers.
+        rows = await asyncio.to_thread(self.db.execute, sanitized)
+        df = pd.DataFrame(rows)
+
+        snapshot = {
+            "sql": sanitized,
+            "rows": df.to_dict("records"),
+            "columns": df.columns.tolist(),
+        }
+        self._recent[(context.conversation_id, context.request_id)] = snapshot
+        self._by_conversation[context.conversation_id] = snapshot
+        return df
+
+    def take_snapshot(self, conversation_id: str, request_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        if request_id:
+            return self._recent.pop((conversation_id, request_id), None)
+        return self._by_conversation.pop(conversation_id, None)
+
+
+class TrackingRunSqlTool(RunSqlTool):
+    """
+    RunSqlTool that keeps per-request snapshots for service-level response shaping.
+    """
+
+    def __init__(self, sql_runner: GuardedSqlRunner):
+        super().__init__(sql_runner=sql_runner)
+        self.sql_runner = sql_runner
+
+    def take_snapshot(self, conversation_id: str, request_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        return self.sql_runner.take_snapshot(conversation_id, request_id)
+
+
+class TrackingVisualizeDataTool(VisualizeDataTool):
+    """
+    VisualizeDataTool wrapper that stores generated chart metadata keyed by request_id.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self._recent_charts: Dict[str, Dict[str, Any]] = {}
+
+    async def execute(self, context, args):
+        result = await super().execute(context, args)
+        chart = result.metadata.get("chart")
+        if chart is not None:
+            self._recent_charts[context.request_id] = {
+                "chart": chart,
+                "metadata": result.metadata,
+            }
+        return result
+
+    def take_snapshot(self, request_id: str) -> Optional[Dict[str, Any]]:
+        return self._recent_charts.pop(request_id, None)
+
+
+class ConfiguredOpenAILlmService(OpenAILlmService):
+    """
+    OpenAI LLM service that ensures temperature/max_tokens are propagated.
+    """
+
+    def _build_payload(self, request):
+        payload = super()._build_payload(request)
+        if request.temperature is not None:
+            payload["temperature"] = request.temperature
+        if request.max_tokens is not None and "max_tokens" not in payload:
+            payload["max_tokens"] = request.max_tokens
+        return payload
+
+
+def build_llm_service(settings: Settings) -> LlmService:
+    """
+    Factory for Vanna-compatible LLM services with temperature/max_tokens bindings.
+    """
+    provider = settings.VANNA_LLM_PROVIDER.lower()
+
+    if provider == "ollama":
+        return OllamaLlmService(
+            model=settings.VANNA_LLM_MODEL,
+            host=settings.VANNA_LLM_ENDPOINT or settings.OLLAMA_BASE_URL,
+            temperature=settings.LLM_TEMPERATURE,
+            num_predict=settings.LLM_MAX_TOKENS,
+        )
+
+    if provider in {"openai", "openai_compatible", "groq"}:
+        api_key = settings.OPENAI_API_KEY or settings.GROQ_API_KEY
+        base_url = settings.VANNA_LLM_ENDPOINT or settings.OPENAI_BASE_URL
+        if provider == "groq" and not base_url:
+            base_url = "https://api.groq.com/openai/v1"
+
+        timeout = settings.GROQ_TIMEOUT if provider == "groq" else settings.OPENAI_TIMEOUT
+
+        return ConfiguredOpenAILlmService(
+            model=settings.VANNA_LLM_MODEL or settings.OPENAI_MODEL or settings.GROQ_MODEL,
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout,
+        )
+
+    if provider == "google":
+        return GeminiLlmService(
+            model=settings.VANNA_LLM_MODEL or settings.GOOGLE_MODEL,
+            api_key=settings.GOOGLE_API_KEY,
+            temperature=settings.LLM_TEMPERATURE,
+        )
+
+    # Default back to OpenAI-compatible path for unknown providers
+    return ConfiguredOpenAILlmService(
+        model=settings.VANNA_LLM_MODEL or settings.OPENAI_MODEL,
+        api_key=settings.OPENAI_API_KEY,
+        base_url=settings.VANNA_LLM_ENDPOINT or settings.OPENAI_BASE_URL,
+    )
+
+
+
+
+
+
+/home/mfadmin/easyok/app/core/config.py
+from app.core.settings import Settings, get_settings, settings
+
+__all__ = ["Settings", "get_settings", "settings"]
+
+
+
+
+
+
+/home/mfadmin/easyok/app/core/settings.py
+
+from __future__ import annotations
+
+import re
+from functools import lru_cache
+from typing import Literal, Optional
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, ValidationInfo, field_validator
+
+
+class Settings(BaseSettings):
+    # =========================================================================
+    # Environment & Identity
+    # =========================================================================
+    ENV: Literal["local", "ci", "production"] = "production"
+    APP_ENV: Literal["development", "staging", "production"] = "production"
+    APP_NAME: str = "EasyData"
+    APP_VERSION: str = "16.7.x"
+    DEBUG: bool = False
+
+    # =========================================================================
+    # Core Provider Selectors
+    # =========================================================================
+    DB_PROVIDER: Literal["oracle", "mssql"] = "oracle"
+    LLM_PROVIDER: Literal["openai", "google", "ollama", "openai_compatible", "groq"] = "groq"
+    VECTOR_DB: Literal["chromadb", "qdrant"] = "chromadb"
+
+    # =========================================================================
+    # Operation Tier (Single Switch)
+    # =========================================================================
+    OPERATION_TIER: Literal[
+        "tier0_fortress",
+        "tier1_governed",
+        "tier2_vanna",
+    ] = "tier1_governed"
+
+    # =========================================================================
+    # Security Toggles
+    # =========================================================================
+    AUTH_ENABLED: bool = True
+    RBAC_ENABLED: bool = True
+    RLS_ENABLED: bool = True
+    ADMIN_LOCAL_BYPASS: bool = False
+
+    # =========================================================================
+    # Feature Toggles
+    # =========================================================================
+    ENABLE_LOGGING: bool = True
+    ENABLE_AUDIT_LOGGING: bool = True
+    ENABLE_RATE_LIMIT: bool = True
+    ENABLE_GZIP_COMPRESSION: bool = True
+    ENABLE_PERFORMANCE: bool = True
+    ENABLE_TRAINING_PILOT: bool = False
+    TRAINING_READINESS_ENFORCED: bool = True
+    ENABLE_RAG_QUALITY: bool = False
+    EASYDATA_ALLOW_LOCAL_NO_SCHEMA_POLICY: bool = False
+
+    # =========================================================================
+    # JWT Configuration
+    # =========================================================================
+    JWT_ALGORITHM: Literal["HS256", "RS256", "ES256"] = "HS256"
+    JWT_SECRET_KEY: Optional[str] = None
+    JWT_PUBLIC_KEY: Optional[str] = None
+    JWT_JWKS_URL: Optional[str] = None
+    JWT_EXPIRATION_MINUTES: int = 60
+    JWT_ISSUER: Optional[str] = None
+    JWT_AUDIENCE: Optional[str] = None
+    JWT_HEADER_NAME: str = "Authorization"
+    JWT_HEADER_PREFIX: str = "Bearer"
+
+    # =========================================================================
+    # RBAC & Authorization
+    # =========================================================================
+    RBAC_ROLES_CLAIM: str = "roles"
+    RBAC_DEFAULT_ROLE: str = "viewer"
+    RBAC_ADMIN_ROLE: str = "admin"
+
+    # =========================================================================
+    # Row Level Security (RLS)
+    # =========================================================================
+    RLS_SCOPE_CLAIM: str = "tenant_id"
+    RLS_MISSING_SCOPE_BEHAVIOR: Literal["deny", "allow"] = "deny"
+
+    # =========================================================================
+    # User / Business Database
+    # =========================================================================
+    ORACLE_CONNECTION_STRING: Optional[str] = None
+    MSSQL_CONNECTION_STRING: Optional[str] = None
+    ORACLE_USER: Optional[str] = None
+    ORACLE_PASSWORD: Optional[str] = None
+    ORACLE_DSN: Optional[str] = None
+
+    # =========================================================================
+    # System Database
+    # =========================================================================
+    SYSTEM_DB_TYPE: Literal["sqlite", "postgres"] = "sqlite"
+    SYSTEM_DB_PATH: str = "./data/logs.db"
+
+    # =========================================================================
+    # Vector Store
+    # =========================================================================
+    VECTOR_STORE_PATH: str = "./data/vectorstore"
+    QDRANT_URL: Optional[str] = None
+    QDRANT_API_KEY: Optional[str] = None
+
+    # =========================================================================
+    # Observability & Tracing
+    # =========================================================================
+    ENABLE_TELEMETRY: bool = True
+    ANON_TELEMETRY: bool = True
+    ENABLE_OTEL: bool = True
+    OTEL_EXPORTER_OTLP_ENDPOINT: Optional[str] = None
+    OTEL_SAMPLER_RATIO: float = 1.0
+    OTEL_SERVICE_NAME: str = "easydata-backend"
+    ENABLE_SIGNOZ_ALERTS: bool = False
+
+    # =========================================================================
+    # Sentry
+    # =========================================================================
+    SENTRY_DSN: Optional[str] = None
+    SENTRY_ENVIRONMENT: str = "production"
+    SENTRY_TRACES_SAMPLE_RATE: float = 1.0
+    SENTRY_ATTACH_STACKTRACE: bool = True
+    SENTRY_ENABLE_OTEL_BRIDGE: bool = True
+    SENTRY_API_TOKEN: Optional[str] = None
+    SENTRY_ORG_SLUG: Optional[str] = None
+    SENTRY_PROJECT_SLUG: Optional[str] = None
+
+    # =========================================================================
+    # LLM Providers
+    # =========================================================================
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: Optional[str] = None
+    OPENAI_BASE_URL: Optional[str] = None
+    OPENAI_TIMEOUT: int = 30
+
+    GOOGLE_API_KEY: Optional[str] = None
+    GOOGLE_MODEL: str = "gemini-1.5-pro"
+
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3"
+
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+    GROQ_TIMEOUT: int = 30
+
+    PHI3_BASE_URL: Optional[str] = None
+    PHI3_MODEL: str = "phi-3"
+    PHI3_API_KEY: Optional[str] = None
+    PHI3_TIMEOUT: int = 30
+
+    # =========================================================================
+    # Shared LLM Controls
+    # =========================================================================
+    LLM_TEMPERATURE: float = Field(0.1, ge=0.0, le=1.0)
+    LLM_MAX_TOKENS: int = 2048
+    LLM_REQUEST_TIMEOUT: int = 60
+
+    # =========================================================================
+    # RAG / Vanna Controls
+    # =========================================================================
+    RAG_TOP_K: int = 5
+    MAX_SQL_TOKENS: int = 2000
+    VANNA_ALLOW_DDL: bool = False
+    VANNA_MAX_ROWS: int = 500
+
+    # =========================================================================
+    # Tier 2 — Vanna Native Settings
+    # =========================================================================
+    VANNA_LLM_PROVIDER: Literal[
+        "ollama",
+        "openai",
+        "openai_compatible",
+        "google",
+        "groq",
+    ] = "ollama"
+    VANNA_LLM_MODEL: str = "neural-chat"
+    VANNA_LLM_ENDPOINT: Optional[str] = "http://localhost:11434"
+
+    VANNA_SQLRUNNER_DIALECT: Literal[
+        "oracle",
+        "mssql",
+        "postgres",
+        "sqlite",
+    ] = "postgres"
+    VANNA_SQLRUNNER_CONNECTION: Optional[str] = None
+
+    VANNA_MEMORY_TYPE: Literal[
+        "in_memory",
+        "postgres",
+        "redis",
+        "chroma",
+    ] = "in_memory"
+
+    VANNA_SYSTEM_PROMPT_TEMPLATE: str = (
+        """
+You are an expert data analyst assistant.
+
+Rules:
+- Always explain your reasoning
+- Prefer explicit column names
+- Limit results to 100 unless asked
+- Use EXPLAIN for complex queries
+"""
+    ).strip()
+
+    VANNA_DEFAULT_LIMIT: int = 100
+    VANNA_MAX_EXECUTION_TIME: int = 30
+    VANNA_RATE_LIMIT_REQUESTS: int = 100
+    VANNA_RATE_LIMIT_WINDOW: int = 3600
+
+    VANNA_ENABLE_FEEDBACK: bool = True
+    VANNA_ENABLE_MEMORY: bool = True
+    VANNA_ENABLE_RICH_OUTPUT: bool = True
+    VANNA_ENABLE_CHARTS: bool = True
+    VANNA_DRY_RUN_MODE: bool = False
+
+    # =========================================================================
+    # Governed Semantic Cache
+    # =========================================================================
+    ENABLE_SEMANTIC_CACHE: bool = False
+    SEMANTIC_CACHE_SIMILARITY_THRESHOLD: float = 0.85
+    SEMANTIC_CACHE_MAX_RESULTS: int = 3
+    SEMANTIC_CACHE_TTL_SECONDS: int = 3600
+    SEMANTIC_CACHE_GOVERNANCE_MODE: Literal["revalidate"] = "revalidate"
+    SEMANTIC_CACHE_STORE_SQL: bool = True
+    SEMANTIC_CACHE_STORE_RESULTS: bool = True
+    REDIS_URL: Optional[str] = None
+
+    # =========================================================================
+    # Admin Feature Governance
+    # =========================================================================
+    ADMIN_FEATURE_TOGGLE_API_ENABLED: bool = True
+    ADMIN_FEATURE_TOGGLE_REQUIRE_REASON: bool = True
+    ADMIN_FEATURE_TOGGLE_EMIT_OTEL: bool = True
+
+    # =========================================================================
+    # Arabic NLP Pipeline
+    # =========================================================================
+    ENABLE_ARABIC_NLP: bool = True
+    ENABLE_CAMEL_TOOLS: bool = True
+    ENABLE_FARASA: bool = False
+    FARASA_MODEL_PATH: Optional[str] = None
+    ARABIC_EMBEDDING_MODEL: str = "CAMeL-Lab/bert-base-arabic-camelbert-da"
+    ARABIC_PREPROCESS_BEFORE_RAG: bool = True
+
+    # =========================================================================
+    # RAG Quality Governance (RAGAS)
+    # =========================================================================
+    ENABLE_RAGAS_EVALUATION: bool = False
+    RAGAS_METRICS: str = "context_precision,context_recall,faithfulness,answer_relevance"
+    RAGAS_EXECUTION_MODE: Literal["async"] = "async"
+    RAGAS_LINK_TO_AUDIT_LOG: bool = True
+
+    # =========================================================================
+    # Rate Limiting
+    # =========================================================================
+    RATE_LIMIT_REQUESTS_PER_MINUTE: int = 60
+    RATE_LIMIT_SCOPE: Literal["user", "ip", "global"] = "user"
+
+    # =========================================================================
+    # Health Checks
+    # =========================================================================
+    HEALTH_CHECK_ENABLED: bool = True
+    HEALTH_CHECK_TIMEOUT: int = 5
+    HEALTH_AGGREGATION_MODE: Literal["strict", "degraded"] = "degraded"
+
+    # =========================================================================
+    # API Server / Runtime Controls
+    # =========================================================================
+    BACKEND_PORT: int = 8000
+    CORS_ORIGINS: list[str] = Field(default_factory=list)
+    STREAM_PROTOCOL: Literal["ndjson", "sse"] = "ndjson"
+    DEFAULT_ROW_LIMIT: int = 100
+
+    # =========================================================================
+    # Sandbox / Shadow Execution
+    # =========================================================================
+    SANDBOX_DATA_STRATEGY: Literal["schema_only", "masked_snapshot", "synthetic_data"] = "schema_only"
+    SANDBOX_SENSITIVE_COLUMNS: list[str] = Field(default_factory=list)
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
+
+    @field_validator("ORACLE_CONNECTION_STRING")
+    @classmethod
+    def sanitise_oracle_connection_string(
+        cls, v: Optional[str], info: ValidationInfo
+    ) -> Optional[str]:
+        if v is None:
+            return None
+
+        v_clean = str(v).strip()
+        if not v_clean:
+            return v_clean
+
+        # Remove trailing markers/comments by taking the first token.
+        v_clean = v_clean.split()[0]
+
+        # Strip surrounding quotes.
+        if (v_clean.startswith('"') and v_clean.endswith('"')) or (
+            v_clean.startswith("'") and v_clean.endswith("'")
+        ):
+            v_clean = v_clean[1:-1]
+
+        # Normalize URL-style DSN to oracledb.connect format:
+        # oracle+oracledb://user:pw@host:port/service -> user/pw@host:port/service
+        m = re.match(
+            r"^(?:[a-zA-Z0-9_+\-]+://)?(?P<user>[^:]+):(?P<pw>[^@]+)@(?P<host>[^:/]+):(?P<port>\d+)[/\\](?P<service>.+)$",
+            v_clean,
+        )
+        if m:
+            return f"{m.group('user')}/{m.group('pw')}@{m.group('host')}:{m.group('port')}/{m.group('service')}"
+
+        return v_clean
+
+@lru_cache
+def get_settings(force_reload: bool = False) -> Settings:
+    if force_reload:
+        get_settings.cache_clear()
+    return Settings()
+
+
+settings = get_settings()
