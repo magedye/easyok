@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, Dict, Optional
+import math  # ✔️ REQUIRED: for NaN / Infinity checks
+from typing import Any, Dict, Optional, List
 
 from vanna import Agent
 from vanna.core.agent.config import AgentConfig
@@ -28,68 +29,78 @@ from app.services.vanna_common import (
 )
 
 # ============================================================================
-# Tier-2 "Unrestricted" System Prompt
-# Defined here to avoid polluting the global settings file
+# Tier-2 System Prompt
 # ============================================================================
 TIER2_SYSTEM_PROMPT = """
 You are a Senior Data Analyst AI (Tier-2 Native Mode).
 
-CAPABILITIES & RULES:
-1. **Direct Execution:** You have direct access to the Oracle Database. Do NOT refuse to run SQL.
-2. **No Artificial Limits:** Do NOT add 'FETCH FIRST n ROWS' unless the user explicitly asks for a limit.
-3. **Self-Correction:** If you receive an ORA-XXXXX error, analyze it, correct the SQL, and RETRY immediately.
-4. **Oracle Dialect:** Use valid Oracle SQL (SYSDATE, || for concatenation, quoting for case-sensitive identifiers).
-5. **Memory:** Check your memory for similar past questions before generating new SQL.
-6. **Persistence:** If a query succeeds, save it to memory for future speed.
-
-Your goal is ACCURACY and COMPLETENESS.
+RULES:
+1. Use ONLY run_sql and visualize_data tools.
+2. No web tools, no file I/O.
+3. Use Oracle SQL dialect.
+4. Retry on ORA- errors.
+5. Do not hallucinate.
 """
 
 class VannaNativeService:
     """
-    Tier 2 — Vanna Native (Productivity-first).
+    Tier-2 — Vanna Native Service
 
-    Full native Vanna agent with unrestricted execution, memory, feedback,
-    and visualization enabled when configured.
+    - Native Oracle execution
+    - Deterministic agent limits
+    - JSON-safe output sanitization (bytes + floats)
     """
 
     def __init__(self) -> None:
         self.settings = settings
 
+        # ------------------------------------------------------------------
+        # User + SQL runner
+        # ------------------------------------------------------------------
         self.user_resolver = ContextUserResolver()
-
-        # 1. استخدام الـ Runner الذكي (يختار NativeSqlRunner تلقائياً في Tier-2)
         self.sql_runner = build_sql_runner(self.settings)
-        
         self.run_sql_tool = TrackingRunSqlTool(self.sql_runner)
-        self.visualize_tool = TrackingVisualizeDataTool()
 
+        # ------------------------------------------------------------------
+        # Tool registry
+        # ------------------------------------------------------------------
         registry = ToolRegistry()
         registry.register_local_tool(self.run_sql_tool, [])
 
+        self.visualize_tool: Optional[TrackingVisualizeDataTool] = None
         if self.settings.VANNA_ENABLE_CHARTS:
+            self.visualize_tool = TrackingVisualizeDataTool()
             registry.register_local_tool(self.visualize_tool, [])
 
+        # ------------------------------------------------------------------
+        # Memory
+        # ------------------------------------------------------------------
         memory = self._init_memory()
-
         if self.settings.VANNA_ENABLE_MEMORY:
             registry.register_local_tool(SaveQuestionToolArgsTool(), [])
             registry.register_local_tool(SearchSavedCorrectToolUsesTool(), [])
             registry.register_local_tool(SaveTextMemoryTool(), [])
 
+        # ------------------------------------------------------------------
+        # Agent config (hard stops)
+        # ------------------------------------------------------------------
         agent_config = AgentConfig(
             stream_responses=False,
             include_thinking_indicators=True,
             temperature=self.settings.LLM_TEMPERATURE,
             max_tokens=self.settings.LLM_MAX_TOKENS,
+            max_iterations=5,
+            request_timeout=60,
         )
 
-        # 2. تحديد الـ System Prompt بناءً على الـ Tier
-        # إذا كنا في Tier-2، نستخدم "الدستور" القوي المعرف أعلاه
-        if self.settings.OPERATION_TIER == "tier2_vanna":
-            base_prompt = TIER2_SYSTEM_PROMPT
-        else:
-            base_prompt = self.settings.VANNA_SYSTEM_PROMPT_TEMPLATE
+        # ------------------------------------------------------------------
+        # System prompt
+        # ------------------------------------------------------------------
+        base_prompt = (
+            TIER2_SYSTEM_PROMPT
+            if self.settings.OPERATION_TIER == "tier2_vanna"
+            else self.settings.VANNA_SYSTEM_PROMPT_TEMPLATE
+        )
 
         self.agent = Agent(
             llm_service=build_llm_service(self.settings),
@@ -104,6 +115,10 @@ class VannaNativeService:
 
         self.chat_handler = ChatHandler(self.agent)
 
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
     async def ask(
         self,
         question: str,
@@ -114,27 +129,29 @@ class VannaNativeService:
         chat_request = ChatRequest(
             message=question,
             request_context=request_context,
-            metadata={"tier": "tier2_vanna"},
+            metadata={"tier": "vanna_native"},
         )
 
         response = await self.chat_handler.handle_poll(chat_request)
 
-        # 3. جلب اللقطة باستخدام request_id (لأن NativeSqlRunner يستخدمه كمفتاح)
         snapshot = self.run_sql_tool.take_snapshot(
             request_id=response.request_id
         )
-        chart_snapshot = self.visualize_tool.take_snapshot(
-            request_id=response.request_id
-        )
+
+        chart_snapshot = None
+        if self.visualize_tool:
+            chart_snapshot = self.visualize_tool.take_snapshot(
+                request_id=response.request_id
+            )
 
         if not snapshot:
-            return {
+            result = {
                 "conversation_id": response.conversation_id,
                 "request_id": response.request_id,
                 "sql": None,
                 "rows": [],
                 "columns": [],
-                "components": [chunk.model_dump() for chunk in response.chunks],
+                "components": [c.model_dump() for c in response.chunks],
                 "chart": chart_snapshot.get("chart") if chart_snapshot else None,
                 "memory": {
                     "enabled": self.settings.VANNA_ENABLE_MEMORY,
@@ -142,20 +159,24 @@ class VannaNativeService:
                 },
                 "message": "No SQL was executed by the agent",
             }
+            return self._sanitize_recursive(result)
 
-        return {
+        result = {
             "conversation_id": response.conversation_id,
             "request_id": response.request_id,
             "sql": snapshot.get("sql"),
             "rows": snapshot.get("rows", []),
             "columns": snapshot.get("columns", []),
-            "components": [chunk.model_dump() for chunk in response.chunks],
+            "components": [c.model_dump() for c in response.chunks],
             "chart": chart_snapshot.get("chart") if chart_snapshot else None,
             "memory": {
                 "enabled": self.settings.VANNA_ENABLE_MEMORY,
                 "type": self.settings.VANNA_MEMORY_TYPE,
             },
         }
+
+        # ✔️ FINAL FIX: sanitize before FastAPI serialization
+        return self._sanitize_recursive(result)
 
     async def handle_feedback(
         self,
@@ -164,9 +185,6 @@ class VannaNativeService:
         rating: int,
         context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """
-        Persist feedback directly into the active agent memory backend.
-        """
         request_context = build_request_context(context)
         user = await self.user_resolver.resolve_user(request_context)
 
@@ -197,26 +215,52 @@ class VannaNativeService:
             "message": "Agent memory updated",
         }
 
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _sanitize_recursive(self, obj: Any) -> Any:
+        """
+        Recursively fix data before JSON serialization:
+        1) Decode bytes with legacy Oracle encodings.
+        2) Replace NaN / Infinity floats with None (JSON-compliant).
+        """
+
+        # Bytes → UTF-8 / CP1252
+        if isinstance(obj, bytes):
+            try:
+                return obj.decode("utf-8")
+            except UnicodeDecodeError:
+                return obj.decode("cp1252", errors="replace")
+
+        # Floats → JSON-safe
+        if isinstance(obj, float):
+            if math.isnan(obj) or math.isinf(obj):
+                return None
+            return obj
+
+        # Dict
+        if isinstance(obj, dict):
+            return {k: self._sanitize_recursive(v) for k, v in obj.items()}
+
+        # List
+        if isinstance(obj, list):
+            return [self._sanitize_recursive(v) for v in obj]
+
+        return obj
+
     def _init_memory(self):
-        """
-        Initialise memory backend.
-        Supports in-memory and Chroma backends.
-        """
         if self.settings.VANNA_MEMORY_TYPE == "in_memory":
             return DemoAgentMemory(max_items=1024)
 
         if self.settings.VANNA_MEMORY_TYPE == "chroma":
-            try:
-                from vanna.integrations.chromadb import ChromaAgentMemory
+            from vanna.integrations.chromadb import ChromaAgentMemory
 
-                return ChromaAgentMemory(
-                    collection_name="vanna_memory",
-                    persist_directory="./data/vanna_memory",
-                )
-            except Exception as exc:
-                raise ValueError(f"Chroma memory unavailable: {exc}")
+            return ChromaAgentMemory(
+                collection_name="vanna_memory",
+                persist_directory="./data/vanna_memory",
+            )
 
         raise ValueError(
-            f"Memory backend '{self.settings.VANNA_MEMORY_TYPE}' "
-            f"is not supported by the current Vanna build"
+            f"Memory backend '{self.settings.VANNA_MEMORY_TYPE}' is not supported"
         )
